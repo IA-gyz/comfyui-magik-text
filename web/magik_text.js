@@ -7,12 +7,12 @@ const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
 
 const TEXT_FIELDS = {
-  "Magik.Text": ["text"],
   "Magik.Text7Concat": ["text1", "text2", "text3", "text4", "text5", "text6", "text7"],
 };
 
-const PANELS_NODE = "Magik.TextPanels";
+const PANELS_NODE = "Magik.Text";
 const MAX_PANELS = 10;
+const PANEL_NAMES = ["text", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `text${i + 2}`)];
 const panelsSync = new WeakMap();
 
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
@@ -647,10 +647,10 @@ function setupPanelsNode(node) {
   if (!countWidget) return;
 
   const textWidgets = [];
-  for (let i = 1; i <= MAX_PANELS; i++) {
-    const widget = node.widgets?.find((w) => w.name === `text${i}` && w.element);
+  for (const name of PANEL_NAMES) {
+    const widget = node.widgets?.find((w) => w.name === name && w.element);
     if (widget) {
-      upgradeWidget(widget, `text${i}`);
+      upgradeWidget(widget, name);
       textWidgets.push(widget);
     }
   }
@@ -685,7 +685,7 @@ function setupPanelsNode(node) {
     const n = getCount();
     textWidgets.forEach((widget, i) => setPanelVisible(widget, i < n));
     while (node.outputs.length > n) node.removeOutput(node.outputs.length - 1);
-    while (node.outputs.length < n) node.addOutput(`text${node.outputs.length + 1}`, "STRING");
+    while (node.outputs.length < n) node.addOutput(PANEL_NAMES[node.outputs.length], "STRING");
     label.textContent = `${n} panel${n === 1 ? "" : "s"}`;
     node.setSize(node.computeSize());
     node.setDirtyCanvas(true, true);
