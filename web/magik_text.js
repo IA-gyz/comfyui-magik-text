@@ -182,8 +182,25 @@ const CSS = `
   overflow: auto;
   background: transparent;
   color: transparent;
-  caret-color: var(--input-text, #ddd);
+  caret-color: var(--fg-color, #fff);
+  caret-shape: bar;
   resize: none;
+  outline: none;
+}
+.magik-panel-title {
+  width: 72px;
+  flex: 0 1 auto;
+  background: transparent;
+  color: var(--fg-color, #ddd);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: 11px/1.6 monospace;
+  padding: 0 4px;
+}
+.magik-panel-title:hover,
+.magik-panel-title:focus {
+  border-color: var(--border-color, #444);
+  background: var(--comfy-input-bg, #383838);
   outline: none;
 }
 .magik-text-editor.magik-nowrap .magik-body pre,
@@ -307,6 +324,7 @@ class MagikTextEditor {
     this.root = el("div", "magik-text-editor");
     this.root.style.setProperty("--comfy-widget-height", `${EDITOR_HEIGHT}px`);
     this.root.style.setProperty("--comfy-widget-min-height", `${MIN_HEIGHT}px`);
+    this.root.style.setProperty("--comfy-widget-max-height", `${EDITOR_HEIGHT}px`);
 
     const toolbar = el("div", "magik-toolbar");
     this.toolbar = toolbar;
@@ -322,8 +340,17 @@ class MagikTextEditor {
       this.root.classList.toggle("magik-nowrap");
       this.btnWrap.classList.toggle("active", this.root.classList.contains("magik-nowrap"));
     });
+    const fontDown = el("button", null, "A−");
+    fontDown.title = "Decrease font size";
+    fontDown.addEventListener("click", () => this.setFontSize(this.fontSize - 1));
+    const fontUp = el("button", null, "A+");
+    fontUp.title = "Increase font size";
+    fontUp.addEventListener("click", () => this.setFontSize(this.fontSize + 1));
     this.stats = el("span", "magik-stats");
-    toolbar.append(btnLine, btnBlock, this.btnWrap, this.stats);
+    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.stats);
+
+    this.fontSize = 12;
+    this.fontKeyFn = null;
 
     this.cardsRow = el("div", "magik-cards");
     this.renderCards();
@@ -339,6 +366,7 @@ class MagikTextEditor {
     this.ta.placeholder = placeholder;
     this.ta.setAttribute("data-testid", "magik-text-editor-input");
     this.body.append(this.pre, this.ta);
+    this.setFontSize(12, false);
 
     this.panel = el("div", "magik-panel");
     this.panel.style.display = "none";
@@ -494,6 +522,50 @@ class MagikTextEditor {
     this.toolbar.appendChild(btn);
   }
 
+  setFontSize(px, save = true) {
+    this.fontSize = Math.min(24, Math.max(8, Math.round(px)));
+    this.pre.style.fontSize = `${this.fontSize}px`;
+    this.ta.style.fontSize = `${this.fontSize}px`;
+    if (save && this.fontKeyFn) {
+      try {
+        localStorage.setItem(this.fontKeyFn(), String(this.fontSize));
+      } catch {
+        // storage unavailable — font size stays session-local
+      }
+    }
+  }
+
+  loadFontSize() {
+    if (!this.fontKeyFn) return;
+    try {
+      const v = parseInt(localStorage.getItem(this.fontKeyFn()) || "", 10);
+      if (Number.isFinite(v)) this.setFontSize(v, false);
+    } catch {
+      // ignore
+    }
+  }
+
+  setPanelTitle(title, onChange) {
+    const input = document.createElement("input");
+    input.className = "magik-panel-title";
+    input.value = title;
+    input.spellcheck = false;
+    input.title = "Panel title — also used as this panel's output name";
+    input.addEventListener("change", () => {
+      const v = input.value.trim();
+      if (v && v !== title) onChange(v);
+      else input.value = title;
+    });
+    this.panelTitleInput = input;
+    this.toolbar.insertBefore(input, this.toolbar.firstChild);
+  }
+
+  setPanelTitleValue(title) {
+    if (this.panelTitleInput && document.activeElement !== this.panelTitleInput) {
+      this.panelTitleInput.value = title;
+    }
+  }
+
   setPanelsLabel(text) {
     if (this.panelLabel) this.panelLabel.textContent = text;
   }
@@ -627,10 +699,27 @@ function upgradeWidget(widget, name) {
     options.hideOnZoom = false;
     options.getHeight = () => EDITOR_HEIGHT;
     options.getMinHeight = () => MIN_HEIGHT;
+    options.getMaxHeight = () => EDITOR_HEIGHT;
 
     editor.onChange = (value) => {
       widget.value = value;
     };
+
+    editor.fontKeyFn = () => `magik-text.font.${widget.node?.id ?? "?"}.${name}`;
+    const loadFont = () => editor.loadFontSize();
+    const node = widget.node;
+    if (node) {
+      if (node.graph) {
+        loadFont();
+      } else {
+        const prevOnAdded = node.onAdded;
+        node.onAdded = function (...args) {
+          const r = prevOnAdded?.apply(this, args);
+          loadFont();
+          return r;
+        };
+      }
+    }
 
     const origOnRemove = widget.onRemove?.bind(widget);
     widget.onRemove = () => {
@@ -668,6 +757,8 @@ function setupPanelsNode(node) {
   setPanelVisible(countWidget, false, "number");
 
   const textWidgets = [];
+  const editors = [];
+  const titles = PANEL_NAMES.slice();
   let firstEditor = null;
   PANEL_NAMES.forEach((name, i) => {
     const widget = node.widgets?.find((w) => w.name === name && w.element);
@@ -675,10 +766,22 @@ function setupPanelsNode(node) {
     const editor = upgradeWidget(widget, name);
     if (!editor) return;
     textWidgets[i] = widget;
+    editors[i] = editor;
     if (!firstEditor) firstEditor = editor;
     editor.setCloseButton(() => closePanel(i));
+    editor.setPanelTitle(titles[i], (t) => renamePanel(i, t));
   });
   if (textWidgets.length === 0 || !firstEditor) return;
+
+  const renamePanel = (i, title) => {
+    titles[i] = title;
+    const out = node.outputs[i];
+    if (out) {
+      out.name = title;
+      out.label = title;
+    }
+    node.setDirtyCanvas(true, true);
+  };
 
   const getCount = () => {
     const v = parseInt(countWidget.value, 10);
@@ -692,7 +795,19 @@ function setupPanelsNode(node) {
     firstEditor.setPanelsLabel(`${n} panel${n === 1 ? "" : "s"}`);
     textWidgets.forEach((widget, i) => setPanelVisible(widget, i < n));
     while (node.outputs.length > n) node.removeOutput(node.outputs.length - 1);
-    while (node.outputs.length < n) node.addOutput(PANEL_NAMES[node.outputs.length], "STRING");
+    while (node.outputs.length < n) {
+      const idx = node.outputs.length;
+      const title = titles[idx] ?? PANEL_NAMES[idx];
+      const out = node.addOutput(title, "STRING");
+      if (out) out.label = title;
+    }
+    for (let i = 0; i < node.outputs.length; i++) {
+      const name = node.outputs[i]?.name;
+      if (name) {
+        titles[i] = name;
+        if (editors[i]) editors[i].setPanelTitleValue(name);
+      }
+    }
     const cs = node.computeSize();
     const cur = node.size ?? [0, 0];
     const w = Math.max(cur[0], cs[0]);
@@ -735,6 +850,12 @@ function setupPanelsNode(node) {
     try {
       for (let j = i; j < n - 1; j++) {
         if (textWidgets[j + 1]) textWidgets[j].value = textWidgets[j + 1].value;
+        titles[j] = titles[j + 1] ?? PANEL_NAMES[j];
+        const out = node.outputs[j];
+        if (out) {
+          out.name = titles[j];
+          out.label = titles[j];
+        }
       }
       if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
       setCount(n - 1);

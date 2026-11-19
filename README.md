@@ -11,10 +11,13 @@ and support for comments inside prompts.
   toolbar (or the node's right-click menu) to add a panel — each new panel adds
   one output, up to 10. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
-  whose output is connected cannot be closed. The first panel keeps the name
-  `text`, so existing single-text workflows keep working unchanged. Panels
-  beyond the current count output an empty string, and comments are stripped
-  from every panel output like in the other nodes.
+  whose output is connected cannot be closed. Each panel has an editable title
+  field (left of its toolbar); renaming it renames the panel's output, and the
+  name is saved in the workflow. Closing a panel shifts the titles and values
+  of the panels above it up, so outputs keep matching their titles. The first
+  panel keeps the name `text`, so existing single-text workflows keep working
+  unchanged. Panels beyond the current count output an empty string, and
+  comments are stripped from every panel output like in the other nodes.
 - **Magik Text 7x Concat** (`Magik.Text7Concat`) — seven multiline text boxes
   (`text1`–`text7`) plus a `delimiter`. Outputs each box individually and a
   `concat` output joining all seven with the delimiter. Empty boxes are kept
@@ -32,8 +35,10 @@ textarea. It provides:
   `Ctrl+Shift+/` toggles a `/* ... */` block comment around the selection
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
-- word-wrap toggle and a status bar with line/word/character counts,
-  including the character count after comments are removed
+- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar,
+  persisted per panel in local storage), and a status bar with
+  line/word/character counts, including the character count after comments
+  are removed
 - **cards**: the card strip below the toolbar holds buttons with predefined
   text. Clicking a card inserts its text into the editor at the cursor,
   replacing any selection. The `＋` button opens a panel to add,
