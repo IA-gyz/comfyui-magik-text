@@ -781,7 +781,7 @@ app.registerExtension({
     };
     const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
     nodeType.prototype.getExtraMenuOptions = function (...args) {
-      const options = getExtraMenuOptions ? getExtraMenuOptions.apply(this, args) : args[1];
+      const options = (getExtraMenuOptions ? getExtraMenuOptions.apply(this, args) : args[1]) ?? args[1];
       const controls = panelsControls.get(this);
       if (controls && Array.isArray(options)) {
         options.push(
