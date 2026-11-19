@@ -1,8 +1,10 @@
 import { app } from "../../scripts/app.js";
 
-const EDITOR_HEIGHT = 180;
-const MIN_HEIGHT = 100;
+const EDITOR_HEIGHT = 200;
+const MIN_HEIGHT = 120;
 const INDENT = "  ";
+const CARDS_KEY = "magik-text.cards.v1";
+const CARDS_EVENT = "magik-text-cards-changed";
 
 const TEXT_FIELDS = {
   "Magik.Text": ["text"],
@@ -13,6 +15,7 @@ const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n
 
 const CSS = `
 .magik-text-editor {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -55,6 +58,89 @@ const CSS = `
   color: var(--descrip-text, #888);
   white-space: nowrap;
   user-select: none;
+}
+.magik-cards {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 2px 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--border-color, #333);
+  background: var(--comfy-menu-bg, #262626);
+}
+.magik-card {
+  flex: 0 0 auto;
+  background: var(--comfy-input-bg, #383838);
+  color: var(--fg-color, #ddd);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 10px;
+  font: 11px/1.6 monospace;
+  padding: 0 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.magik-card:hover {
+  border-color: var(--fg-color, #ddd);
+}
+.magik-card-add {
+  border-style: dashed;
+}
+.magik-panel {
+  position: absolute;
+  top: 56px;
+  right: 4px;
+  z-index: 10;
+  width: min(340px, 92%);
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  background: var(--comfy-menu-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  padding: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.magik-panel-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.magik-panel-new {
+  border-top: 1px solid var(--border-color, #333);
+  padding-top: 6px;
+}
+.magik-panel-name {
+  width: 84px;
+  flex: 0 0 auto;
+}
+.magik-panel-text {
+  flex: 1 1 auto;
+  resize: vertical;
+}
+.magik-panel-name,
+.magik-panel-text {
+  background: var(--comfy-input-bg, #202020);
+  color: var(--input-text, #ddd);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font: 11px/1.4 monospace;
+}
+.magik-panel button {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--fg-color, #ddd);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  font: 11px/1.6 monospace;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.magik-panel button:hover {
+  background: var(--comfy-input-bg, #383838);
 }
 .magik-body {
   position: relative;
@@ -163,6 +249,27 @@ function stripComments(text) {
   return out;
 }
 
+function loadCards() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CARDS_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((c) => c && typeof c.name === "string" && typeof c.text === "string");
+  } catch {
+    return [];
+  }
+}
+
+let cards = loadCards();
+
+function saveCards() {
+  try {
+    localStorage.setItem(CARDS_KEY, JSON.stringify(cards));
+  } catch {
+    // storage unavailable (private mode etc.) — cards stay session-local
+  }
+  window.dispatchEvent(new CustomEvent(CARDS_EVENT));
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -194,6 +301,9 @@ class MagikTextEditor {
     this.stats = el("span", "magik-stats");
     toolbar.append(btnLine, btnBlock, this.btnWrap, this.stats);
 
+    this.cardsRow = el("div", "magik-cards");
+    this.renderCards();
+
     this.body = el("div", "magik-body");
     this.pre = document.createElement("pre");
     this.pre.setAttribute("aria-hidden", "true");
@@ -206,13 +316,18 @@ class MagikTextEditor {
     this.ta.setAttribute("data-testid", "magik-text-editor-input");
     this.body.append(this.pre, this.ta);
 
-    this.root.append(toolbar, this.body);
+    this.panel = el("div", "magik-panel");
+    this.panel.style.display = "none";
+
+    this.root.append(toolbar, this.cardsRow, this.body, this.panel);
 
     this.onChange = null;
 
     this.ta.addEventListener("input", () => this.commit());
     this.ta.addEventListener("scroll", () => this.syncScroll());
     this.ta.addEventListener("keydown", (e) => this.onKeydown(e));
+    this.cardsListener = () => this.renderCards();
+    window.addEventListener(CARDS_EVENT, this.cardsListener);
   }
 
   getValue() {
@@ -250,6 +365,102 @@ class MagikTextEditor {
     if (out !== v.length) text += ` · ${out} out`;
     this.stats.textContent = text;
     this.stats.title = "lines · words · characters · characters remaining after comments are removed";
+  }
+
+  renderCards() {
+    this.cardsRow.replaceChildren();
+    for (const card of cards) {
+      const chip = el("button", "magik-card", card.name);
+      chip.title = card.text;
+      chip.addEventListener("click", () => this.insertCard(card.text));
+      this.cardsRow.appendChild(chip);
+    }
+    const addChip = el("button", "magik-card magik-card-add", "＋");
+    addChip.title = "Add / edit / remove cards";
+    addChip.addEventListener("click", () => this.togglePanel());
+    this.cardsRow.appendChild(addChip);
+  }
+
+  togglePanel() {
+    const willOpen = this.panel.style.display === "none";
+    this.panel.style.display = willOpen ? "block" : "none";
+    if (willOpen) this.renderPanel();
+  }
+
+  renderPanel() {
+    this.panel.replaceChildren();
+    cards.forEach((card, i) => {
+      const row = el("div", "magik-panel-row");
+      const name = document.createElement("input");
+      name.className = "magik-panel-name";
+      name.placeholder = "name";
+      name.value = card.name;
+      name.addEventListener("input", () => {
+        card.name = name.value;
+        saveCards();
+        this.renderCards();
+      });
+      const text = document.createElement("textarea");
+      text.className = "magik-panel-text";
+      text.placeholder = "text to insert";
+      text.rows = 2;
+      text.value = card.text;
+      text.addEventListener("input", () => {
+        card.text = text.value;
+        saveCards();
+        this.renderCards();
+      });
+      const del = el("button", null, "✕");
+      del.title = "Remove card";
+      del.addEventListener("click", () => {
+        cards.splice(i, 1);
+        saveCards();
+        this.renderPanel();
+      });
+      row.append(name, text, del);
+      this.panel.appendChild(row);
+    });
+
+    const addRow = el("div", "magik-panel-row magik-panel-new");
+    this.newName = document.createElement("input");
+    this.newName.className = "magik-panel-name";
+    this.newName.placeholder = "name";
+    this.newText = document.createElement("textarea");
+    this.newText.className = "magik-panel-text";
+    this.newText.placeholder = "text to insert";
+    this.newText.rows = 2;
+    const add = el("button", null, "Add");
+    add.title = "Add card";
+    add.addEventListener("click", () => {
+      const text = this.newText.value;
+      if (!text) return;
+      const name = this.newName.value.trim() || text.trim().slice(0, 16) || `card ${cards.length + 1}`;
+      cards.push({ name, text });
+      saveCards();
+      this.renderPanel();
+      this.newName.value = "";
+      this.newText.value = "";
+    });
+    addRow.append(this.newName, this.newText, add);
+    this.panel.appendChild(addRow);
+  }
+
+  insertCard(text) {
+    const ta = this.ta;
+    const v = ta.value;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    const ls = this.lineStartIndex(s);
+    let le = v.indexOf("\n", e);
+    if (le === -1) le = v.length;
+    const before = v.slice(ls, s);
+    const after = v.slice(e, le);
+    let insert = text;
+    if (before.trim() !== "" && !insert.startsWith("\n")) insert = "\n" + insert;
+    if (after.trim() !== "" && !insert.endsWith("\n")) insert += "\n";
+    ta.setRangeText(insert, s, e, "end");
+    this.commit();
+    ta.focus();
   }
 
   lineStartIndex(pos) {
@@ -384,6 +595,12 @@ function upgradeWidget(widget, name) {
 
     editor.onChange = (value) => {
       widget.value = value;
+    };
+
+    const origOnRemove = widget.onRemove?.bind(widget);
+    widget.onRemove = () => {
+      window.removeEventListener(CARDS_EVENT, editor.cardsListener);
+      if (origOnRemove) origOnRemove();
     };
 
     widget.element = editor.root;

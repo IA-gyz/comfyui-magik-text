@@ -26,6 +26,11 @@ textarea. It provides:
   indentation of the previous line
 - word-wrap toggle and a status bar with line/word/character counts,
   including the character count after comments are removed
+- **cards**: the card strip below the toolbar holds buttons with predefined
+  text. Clicking a card inserts its text into the editor at the cursor (on its
+  own line when surrounded by text). The `＋` button opens a panel to add,
+  edit and remove cards. Cards are shared by all Magik text editors and stored
+  in the browser's local storage.
 
 ## Comments
 
