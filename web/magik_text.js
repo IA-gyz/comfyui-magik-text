@@ -688,7 +688,6 @@ function setupPanelsNode(node) {
     try {
       n = Math.min(MAX_PANELS, Math.max(1, n));
       countWidget.value = n;
-      if (countWidget.callback) countWidget.callback(n);
       syncPanels();
     } catch (err) {
       console.error("[magik-text] could not change panel count", err);
@@ -701,8 +700,14 @@ function setupPanelsNode(node) {
   );
 
   const origCallback = countWidget.callback;
-  countWidget.callback = (v) => {
-    if (origCallback) origCallback(v);
+  countWidget.callback = function (v) {
+    if (origCallback) {
+      try {
+        origCallback.call(this, v);
+      } catch (err) {
+        console.error("[magik-text] count widget callback failed", err);
+      }
+    }
     try {
       syncPanels();
     } catch (err) {
