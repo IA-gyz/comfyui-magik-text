@@ -230,12 +230,14 @@ const CSS = `
 }
 .magik-resize-handle {
   flex: 0 0 auto;
-  height: 6px;
+  height: 8px;
   cursor: ns-resize;
+  touch-action: none;
   border-top: 1px solid var(--border-color, #333);
   background: transparent;
 }
-.magik-resize-handle:hover {
+.magik-resize-handle:hover,
+.magik-resize-handle.magik-dragging {
   background: var(--border-color, #555);
 }
 .magik-c { color: #6a9955; font-style: italic; }
@@ -335,6 +337,7 @@ class MagikTextEditor {
     this.root = el("div", "magik-text-editor");
     this.height = EDITOR_HEIGHT;
     this.heightKeyFn = null;
+    this.onHeightChanging = null;
     this.onHeightChanged = null;
     this.applyHeight();
 
@@ -390,16 +393,22 @@ class MagikTextEditor {
       e.stopPropagation();
       const startY = e.clientY;
       const startH = this.height;
-      const move = (ev) => this.setHeight(startH + (ev.clientY - startY));
+      this.handle.classList.add("magik-dragging");
+      const move = (ev) => {
+        this.setHeight(startH + (ev.clientY - startY), false);
+        if (this.onHeightChanging) this.onHeightChanging();
+      };
       let ended = false;
       const end = () => {
         if (ended) return;
         ended = true;
+        this.handle.classList.remove("magik-dragging");
         this.handle.removeEventListener("pointermove", move);
         this.handle.removeEventListener("pointerup", end);
         this.handle.removeEventListener("lostpointercapture", end);
         document.removeEventListener("pointerup", end, true);
-        if (this.onHeightChanged) this.onHeightChanged();
+        this.setHeight(this.height, true);
+        if (this.onHeightChanged) this.onHeightChanged(true);
       };
       this.handle.addEventListener("pointermove", move);
       this.handle.addEventListener("pointerup", end);
@@ -588,8 +597,8 @@ class MagikTextEditor {
 
   applyHeight() {
     this.root.style.setProperty("--comfy-widget-height", `${this.height}px`);
+    this.root.style.setProperty("--comfy-widget-min-height", `${this.height}px`);
     this.root.style.setProperty("--comfy-widget-max-height", `${this.height}px`);
-    this.root.style.setProperty("--comfy-widget-min-height", `${MIN_HEIGHT}px`);
   }
 
   setHeight(px, save = true) {
@@ -767,7 +776,7 @@ function upgradeWidget(widget, name) {
     };
     options.hideOnZoom = false;
     options.getHeight = () => editor.height;
-    options.getMinHeight = () => MIN_HEIGHT;
+    options.getMinHeight = () => editor.height;
     options.getMaxHeight = () => editor.height;
 
     editor.onChange = (value) => {
@@ -777,11 +786,20 @@ function upgradeWidget(widget, name) {
     const node = widget.node;
     editor.fontKeyFn = () => `magik-text.font.${node?.id ?? "?"}.${name}`;
     editor.heightKeyFn = () => `magik-text.height.${node?.id ?? "?"}.${name}`;
-    editor.onHeightChanged = () => {
+    const growNode = () => {
       if (!node) return;
       const cs = node.computeSize();
       const cur = node.size ?? [0, 0];
       node.setSize([Math.max(cur[0], cs[0]), Math.max(cur[1], cs[1])]);
+      node.setDirtyCanvas(true, true);
+    };
+    editor.onHeightChanging = growNode;
+    editor.onHeightChanged = (settle) => {
+      if (!node) return;
+      const cs = node.computeSize();
+      const cur = node.size ?? [0, 0];
+      const h = settle ? cs[1] : Math.max(cur[1], cs[1]);
+      node.setSize([Math.max(cur[0], cs[0]), h]);
       node.setDirtyCanvas(true, true);
       node.graph?.change?.();
     };
