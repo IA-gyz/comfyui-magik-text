@@ -11,6 +11,14 @@ and support for comments inside prompts.
   (`text1`–`text7`) plus a `delimiter`. Outputs each box individually and a
   `concat` output joining all seven with the delimiter. Empty boxes are kept
   as empty entries. Use the literal `\n` as delimiter for newlines.
+- **Magik Text Panels** (`Magik.TextPanels`) — a node with a dynamic number of
+  text panels: every panel is a full text editor (with cards, comments and
+  highlighting) and has its own output (`text1`, `text2`, …). Use the ＋ / －
+  buttons in the node (or the `count` widget) to add or remove panels — each
+  new panel adds one output, up to 10. Removing a panel removes its output and
+  its links, and the panel outputs an empty string; its text stays stored in
+  the workflow. Comments are stripped from every panel output like in the
+  other nodes.
 
 ## Text editor
 
