@@ -32,7 +32,7 @@ class MagikText(io.ComfyNode):
     def define_schema(cls):
         names = _panel_names()
         inputs = [
-            io.Int.Input("count", default=1, min=1, max=PANEL_COUNT, optional=True,
+            io.Int.Input("count", default=1, min=1, max=PANEL_COUNT,
                          tooltip="Number of visible text panels/outputs"),
         ]
         inputs += [

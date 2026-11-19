@@ -629,22 +629,23 @@ function upgradeWidget(widget, name) {
   }
 }
 
-function setPanelVisible(widget, visible) {
-  if (!widget || !widget.element) return;
+function setPanelVisible(widget, visible, restoreType = "customtext") {
+  if (!widget) return;
   if (visible) {
-    widget.type = "customtext";
+    widget.type = restoreType;
     widget.hidden = false;
-    widget.element.style.display = "";
+    if (widget.element) widget.element.style.display = "";
   } else {
     widget.hidden = true;
     widget.type = "hidden";
-    widget.element.style.display = "none";
+    if (widget.element) widget.element.style.display = "none";
   }
 }
 
 function setupPanelsNode(node) {
   const countWidget = node.widgets?.find((w) => w.name === "count");
   if (!countWidget) return;
+  setPanelVisible(countWidget, false, "number");
 
   const textWidgets = [];
   for (const name of PANEL_NAMES) {
@@ -715,6 +716,11 @@ app.registerExtension({
   name: "magik.text.editor",
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData.name !== PANELS_NODE) return;
+    const onNodeCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function (...args) {
+      if (onNodeCreated) onNodeCreated.apply(this, args);
+      setupPanelsNode(this);
+    };
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function (...args) {
       if (onConfigure) onConfigure.apply(this, args);
@@ -723,12 +729,7 @@ app.registerExtension({
     };
   },
   async nodeCreated(node) {
-    const nodeClass = node.comfyClass ?? node.type;
-    if (nodeClass === PANELS_NODE) {
-      setupPanelsNode(node);
-      return;
-    }
-    const fields = TEXT_FIELDS[nodeClass];
+    const fields = TEXT_FIELDS[node.comfyClass ?? node.type];
     if (!fields || !node.widgets) return;
     for (const name of fields) {
       const widget = node.widgets.find((w) => w.name === name && w.element);
