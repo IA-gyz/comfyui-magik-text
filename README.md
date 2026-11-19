@@ -46,6 +46,13 @@ textarea. It provides:
   replacing any selection. The `＋` button opens a panel to add,
   edit and remove cards. Cards are shared by all Magik text editors and stored
   in the browser's local storage.
+- **wildcards toggle** (`wild` button in each panel's toolbar, on by default):
+  when on, the panel's text is expanded with ComfyUI's dynamic-prompt rules
+  at queue time — `{a|b|c}` picks one option at random (nesting and `\{`
+  escapes work, `/* */` and `//` comments are stripped, exactly like ComfyUI's
+  built-in dynamic prompts). When off, the text is sent verbatim.
+- **panel title**: the input at the far left of each panel's toolbar is the
+  panel's title; renaming it renames the corresponding output slot.
 
 ## Comments
 

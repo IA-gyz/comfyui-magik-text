@@ -20,6 +20,11 @@ def _panel_names():
     return ["text"] + [f"text{i}" for i in range(2, PANEL_COUNT + 1)]
 
 
+def _wildcard_names():
+    """Per-panel wildcard toggle names. Expansion itself happens frontend-side at queue time."""
+    return ["wildcards"] + [f"wildcards{i}" for i in range(2, PANEL_COUNT + 1)]
+
+
 class MagikText(io.ComfyNode):
     """Multiline text with a dynamic number of panels/outputs.
 
@@ -39,6 +44,15 @@ class MagikText(io.ComfyNode):
             io.String.Input(name, multiline=True, default="", dynamic_prompts=True)
             for name in names
         ]
+        inputs += [
+            io.Boolean.Input(
+                name,
+                default=True,
+                optional=True,
+                tooltip="When on, this panel's text is expanded with ComfyUI dynamic-prompt wildcards ({a|b} choices) at queue time",
+            )
+            for name in _wildcard_names()
+        ]
         outputs = [io.String.Output(name) for name in names]
         return io.Schema(
             node_id="Magik.Text",
@@ -49,7 +63,9 @@ class MagikText(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, count, text, text2, text3, text4, text5, text6, text7, text8, text9, text10):
+    def execute(cls, count, text, text2, text3, text4, text5, text6, text7, text8, text9, text10,
+                wildcards, wildcards2, wildcards3, wildcards4, wildcards5,
+                wildcards6, wildcards7, wildcards8, wildcards9, wildcards10):
         raw = (text, text2, text3, text4, text5, text6, text7, text8, text9, text10)
         stripped = [strip_comments(_clean(t)) for t in raw]
         return io.NodeOutput(*panel_outputs(count, stripped, PANEL_COUNT))
