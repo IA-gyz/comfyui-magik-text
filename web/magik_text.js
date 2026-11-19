@@ -204,6 +204,12 @@ const CSS = `
   user-select: none;
   white-space: nowrap;
 }
+.magik-close {
+  margin-left: 4px;
+}
+.magik-close:hover {
+  color: var(--error-text, #f66);
+}
 .magik-c { color: #6a9955; font-style: italic; }
 .magik-w { color: #569cd6; }
 .magik-a { color: #ce9178; }
@@ -470,19 +476,22 @@ class MagikTextEditor {
     ta.focus();
   }
 
-  setPanelsControls(onAdd, onRemove) {
+  setPanelsControls(onAdd) {
     const sep = el("span", "magik-toolbar-sep");
     this.panelLabel = el("span", "magik-panels-label", "");
-    const minus = el("button", null, "－");
-    minus.title = "Remove the last text panel (removes its output)";
-    minus.addEventListener("click", onRemove);
     const plus = el("button", null, "＋");
     plus.title = "Add a text panel (adds one output)";
     plus.addEventListener("click", onAdd);
     this.toolbar.insertBefore(sep, this.stats);
     this.toolbar.insertBefore(this.panelLabel, this.stats);
-    this.toolbar.insertBefore(minus, this.stats);
     this.toolbar.insertBefore(plus, this.stats);
+  }
+
+  setCloseButton(onClose) {
+    const btn = el("button", "magik-close", "✕");
+    btn.title = "Close this panel (removes its output; blocked while the output is connected)";
+    btn.addEventListener("click", onClose);
+    this.toolbar.appendChild(btn);
   }
 
   setPanelsLabel(text) {
@@ -653,19 +662,22 @@ function setPanelVisible(widget, visible, restoreType = "customtext") {
 }
 
 function setupPanelsNode(node) {
+  if (panelsControls.has(node)) return;
   const countWidget = node.widgets?.find((w) => w.name === "count");
   if (!countWidget) return;
   setPanelVisible(countWidget, false, "number");
 
   const textWidgets = [];
   let firstEditor = null;
-  for (const name of PANEL_NAMES) {
+  PANEL_NAMES.forEach((name, i) => {
     const widget = node.widgets?.find((w) => w.name === name && w.element);
-    if (!widget) continue;
+    if (!widget) return;
     const editor = upgradeWidget(widget, name);
-    textWidgets.push(widget);
-    firstEditor ??= editor;
-  }
+    if (!editor) return;
+    textWidgets[i] = widget;
+    if (!firstEditor) firstEditor = editor;
+    editor.setCloseButton(() => closePanel(i));
+  });
   if (textWidgets.length === 0 || !firstEditor) return;
 
   const getCount = () => {
@@ -700,10 +712,31 @@ function setupPanelsNode(node) {
     }
   };
 
-  firstEditor.setPanelsControls(
-    () => setCount(getCount() + 1),
-    () => setCount(getCount() - 1),
-  );
+  const closePanel = (i) => {
+    const n = getCount();
+    if (i >= n) return;
+    if (n <= 1) {
+      console.warn("[magik-text] cannot close the last remaining panel");
+      return;
+    }
+    const connected =
+      node.isOutputConnected?.(i) ?? ((node.outputs[i]?.links?.length ?? 0) > 0);
+    if (connected) {
+      console.warn("[magik-text] cannot close panel: its output is connected");
+      return;
+    }
+    try {
+      for (let j = i; j < n - 1; j++) {
+        if (textWidgets[j + 1]) textWidgets[j].value = textWidgets[j + 1].value;
+      }
+      if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
+      setCount(n - 1);
+    } catch (err) {
+      console.error("[magik-text] could not close panel", err);
+    }
+  };
+
+  firstEditor.setPanelsControls(() => setCount(getCount() + 1));
 
   const origCallback = countWidget.callback;
   countWidget.callback = function (v) {
@@ -721,7 +754,7 @@ function setupPanelsNode(node) {
     }
   };
 
-  panelsControls.set(node, { getCount, setCount, sync: syncPanels });
+  panelsControls.set(node, { getCount, setCount, sync: syncPanels, closePanel });
   syncPanels();
 }
 
@@ -758,7 +791,7 @@ app.registerExtension({
           },
           {
             content: "Remove last text panel (removes its output)",
-            callback: () => controls.setCount(controls.getCount() - 1),
+            callback: () => controls.closePanel(controls.getCount() - 1),
           },
         );
       }
@@ -766,7 +799,12 @@ app.registerExtension({
     };
   },
   async nodeCreated(node) {
-    const fields = TEXT_FIELDS[node.comfyClass ?? node.type];
+    const nodeClass = node.comfyClass ?? node.type;
+    if (nodeClass === PANELS_NODE) {
+      setupPanelsNode(node);
+      return;
+    }
+    const fields = TEXT_FIELDS[nodeClass];
     if (!fields || !node.widgets) return;
     for (const name of fields) {
       const widget = node.widgets.find((w) => w.name === name && w.element);

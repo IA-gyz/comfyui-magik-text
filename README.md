@@ -7,10 +7,12 @@ and support for comments inside prompts.
 
 - **Magik Text** (`Magik.Text`) — a multiline text box with a dynamic number of
   panels. Every panel is a full text editor (with cards, comments and
-  highlighting) and has its own output. Use the ＋ / － buttons in the first
-  panel's toolbar (or the node's right-click menu: "Add text panel" / "Remove
-  last text panel") to add or remove panels — each new panel adds one output,
-  up to 10. The first panel keeps the name `text`, so existing single-text
+  highlighting) and has its own output. Use the ＋ button in the first panel's
+  toolbar (or the node's right-click menu) to add a panel — each new panel adds
+  one output, up to 10. Each panel has its own ✕ close button; closing a panel
+  removes it and its output (values of the panels above shift up). A panel
+  whose output is connected cannot be closed. The first panel keeps the name
+  `text`, so existing single-text
   workflows keep working unchanged. Removing a panel removes its output and
   its links, and the panel outputs an empty string; its text stays stored in
   the workflow. Comments are stripped from every panel output like in the
