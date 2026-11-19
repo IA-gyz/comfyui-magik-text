@@ -1,12 +1,16 @@
 from comfy_api.latest import ComfyExtension, io
 
+from .comment_strip import strip_comments
+
 CATEGORY = "Magik/Text"
 TEXT_COUNT = 7
 
 
 def _clean(value):
     """Frontend can hand over the literal string 'undefined' for unset widgets."""
-    return "" if value == "undefined" else value
+    if value is None or value == "undefined":
+        return ""
+    return value
 
 
 class MagikText(io.ComfyNode):
@@ -28,7 +32,7 @@ class MagikText(io.ComfyNode):
 
     @classmethod
     def execute(cls, text):
-        return io.NodeOutput(text)
+        return io.NodeOutput(strip_comments(_clean(text)))
 
 
 class MagikText7Concat(io.ComfyNode):
@@ -53,7 +57,7 @@ class MagikText7Concat(io.ComfyNode):
 
     @classmethod
     def execute(cls, text1, text2, text3, text4, text5, text6, text7, delimiter):
-        texts = [_clean(t) for t in (text1, text2, text3, text4, text5, text6, text7)]
+        texts = [strip_comments(_clean(t)) for t in (text1, text2, text3, text4, text5, text6, text7)]
 
         if delimiter == "\\n":
             delimiter = "\n"
