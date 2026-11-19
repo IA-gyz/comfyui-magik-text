@@ -2,7 +2,6 @@ import { app } from "../../scripts/app.js";
 
 const EDITOR_HEIGHT = 200;
 const MIN_HEIGHT = 120;
-const MAX_EDITOR_HEIGHT = 600;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
@@ -602,7 +601,7 @@ class MagikTextEditor {
   }
 
   setHeight(px, save = true) {
-    this.height = Math.min(MAX_EDITOR_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
+    this.height = Math.max(MIN_HEIGHT, Math.round(px));
     this.applyHeight();
     if (save && this.heightKeyFn) {
       try {

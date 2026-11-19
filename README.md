@@ -36,7 +36,7 @@ textarea. It provides:
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
 - word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar),
-  and a per-panel height (drag the handle at the bottom of a panel, 120–600 px).
+  and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
   Both are persisted per panel in local storage (keyed by node id + widget
   name) and restored on reload / tab switch. The status bar shows
   line/word/character counts, including the character count after comments
