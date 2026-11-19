@@ -13,7 +13,7 @@ const TEXT_FIELDS = {
 const PANELS_NODE = "Magik.Text";
 const MAX_PANELS = 10;
 const PANEL_NAMES = ["text", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `text${i + 2}`)];
-const panelsSync = new WeakMap();
+const panelsControls = new WeakMap();
 
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
 
@@ -642,10 +642,12 @@ function setPanelVisible(widget, visible, restoreType = "customtext") {
   if (visible) {
     widget.type = restoreType;
     widget.hidden = false;
+    if (widget.options) widget.options.hidden = false;
     if (widget.element) widget.element.style.display = "";
   } else {
     widget.hidden = true;
     widget.type = "hidden";
+    if (widget.options) widget.options.hidden = true;
     if (widget.element) widget.element.style.display = "none";
   }
 }
@@ -673,20 +675,24 @@ function setupPanelsNode(node) {
 
   const syncPanels = () => {
     const n = getCount();
+    firstEditor.setPanelsLabel(`${n} panel${n === 1 ? "" : "s"}`);
     textWidgets.forEach((widget, i) => setPanelVisible(widget, i < n));
     while (node.outputs.length > n) node.removeOutput(node.outputs.length - 1);
     while (node.outputs.length < n) node.addOutput(PANEL_NAMES[node.outputs.length], "STRING");
-    firstEditor.setPanelsLabel(`${n} panel${n === 1 ? "" : "s"}`);
     node.setSize(node.computeSize());
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
   };
 
   const setCount = (n) => {
-    n = Math.min(MAX_PANELS, Math.max(1, n));
-    countWidget.value = n;
-    if (countWidget.callback) countWidget.callback(n);
-    syncPanels();
+    try {
+      n = Math.min(MAX_PANELS, Math.max(1, n));
+      countWidget.value = n;
+      if (countWidget.callback) countWidget.callback(n);
+      syncPanels();
+    } catch (err) {
+      console.error("[magik-text] could not change panel count", err);
+    }
   };
 
   firstEditor.setPanelsControls(
@@ -697,10 +703,14 @@ function setupPanelsNode(node) {
   const origCallback = countWidget.callback;
   countWidget.callback = (v) => {
     if (origCallback) origCallback(v);
-    syncPanels();
+    try {
+      syncPanels();
+    } catch (err) {
+      console.error("[magik-text] panel sync failed", err);
+    }
   };
 
-  panelsSync.set(node, syncPanels);
+  panelsControls.set(node, { getCount, setCount, sync: syncPanels });
   syncPanels();
 }
 
@@ -716,8 +726,32 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function (...args) {
       if (onConfigure) onConfigure.apply(this, args);
-      const sync = panelsSync.get(this);
-      if (sync) sync();
+      const controls = panelsControls.get(this);
+      if (controls) {
+        try {
+          controls.sync();
+        } catch (err) {
+          console.error("[magik-text] panel sync after load failed", err);
+        }
+      }
+    };
+    const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
+    nodeType.prototype.getExtraMenuOptions = function (...args) {
+      const options = getExtraMenuOptions ? getExtraMenuOptions.apply(this, args) : args[1];
+      const controls = panelsControls.get(this);
+      if (controls && Array.isArray(options)) {
+        options.push(
+          {
+            content: "Add text panel (adds one output)",
+            callback: () => controls.setCount(controls.getCount() + 1),
+          },
+          {
+            content: "Remove last text panel (removes its output)",
+            callback: () => controls.setCount(controls.getCount() - 1),
+          },
+        );
+      }
+      return options;
     };
   },
   async nodeCreated(node) {
