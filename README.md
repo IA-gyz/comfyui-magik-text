@@ -12,11 +12,9 @@ and support for comments inside prompts.
   one output, up to 10. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
   whose output is connected cannot be closed. The first panel keeps the name
-  `text`, so existing single-text
-  workflows keep working unchanged. Removing a panel removes its output and
-  its links, and the panel outputs an empty string; its text stays stored in
-  the workflow. Comments are stripped from every panel output like in the
-  other nodes.
+  `text`, so existing single-text workflows keep working unchanged. Panels
+  beyond the current count output an empty string, and comments are stripped
+  from every panel output like in the other nodes.
 - **Magik Text 7x Concat** (`Magik.Text7Concat`) — seven multiline text boxes
   (`text1`–`text7`) plus a `delimiter`. Outputs each box individually and a
   `concat` output joining all seven with the delimiter. Empty boxes are kept
