@@ -2,6 +2,7 @@ import { app } from "../../scripts/app.js";
 
 const EDITOR_HEIGHT = 200;
 const MIN_HEIGHT = 120;
+const MAX_EDITOR_HEIGHT = 600;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
@@ -227,6 +228,16 @@ const CSS = `
 .magik-close:hover {
   color: var(--error-text, #f66);
 }
+.magik-resize-handle {
+  flex: 0 0 auto;
+  height: 6px;
+  cursor: ns-resize;
+  border-top: 1px solid var(--border-color, #333);
+  background: transparent;
+}
+.magik-resize-handle:hover {
+  background: var(--border-color, #555);
+}
 .magik-c { color: #6a9955; font-style: italic; }
 .magik-w { color: #569cd6; }
 .magik-a { color: #ce9178; }
@@ -322,9 +333,10 @@ class MagikTextEditor {
     injectStyles();
 
     this.root = el("div", "magik-text-editor");
-    this.root.style.setProperty("--comfy-widget-height", `${EDITOR_HEIGHT}px`);
-    this.root.style.setProperty("--comfy-widget-min-height", `${MIN_HEIGHT}px`);
-    this.root.style.setProperty("--comfy-widget-max-height", `${EDITOR_HEIGHT}px`);
+    this.height = EDITOR_HEIGHT;
+    this.heightKeyFn = null;
+    this.onHeightChanged = null;
+    this.applyHeight();
 
     const toolbar = el("div", "magik-toolbar");
     this.toolbar = toolbar;
@@ -371,7 +383,24 @@ class MagikTextEditor {
     this.panel = el("div", "magik-panel");
     this.panel.style.display = "none";
 
-    this.root.append(toolbar, this.cardsRow, this.body, this.panel);
+    this.handle = el("div", "magik-resize-handle");
+    this.handle.title = "Drag to resize this panel";
+    this.handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startY = e.clientY;
+      const startH = this.height;
+      const move = (ev) => this.setHeight(startH + (ev.clientY - startY));
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        if (this.onHeightChanged) this.onHeightChanged();
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+
+    this.root.append(toolbar, this.cardsRow, this.body, this.panel, this.handle);
 
     this.onChange = null;
 
@@ -545,6 +574,34 @@ class MagikTextEditor {
     }
   }
 
+  applyHeight() {
+    this.root.style.setProperty("--comfy-widget-height", `${this.height}px`);
+    this.root.style.setProperty("--comfy-widget-max-height", `${this.height}px`);
+    this.root.style.setProperty("--comfy-widget-min-height", `${MIN_HEIGHT}px`);
+  }
+
+  setHeight(px, save = true) {
+    this.height = Math.min(MAX_EDITOR_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
+    this.applyHeight();
+    if (save && this.heightKeyFn) {
+      try {
+        localStorage.setItem(this.heightKeyFn(), String(this.height));
+      } catch {
+        // storage unavailable — height stays session-local
+      }
+    }
+  }
+
+  loadHeight() {
+    if (!this.heightKeyFn) return;
+    try {
+      const v = parseInt(localStorage.getItem(this.heightKeyFn()) || "", 10);
+      if (Number.isFinite(v)) this.setHeight(v, false);
+    } catch {
+      // ignore
+    }
+  }
+
   setPanelTitle(title, onChange) {
     const input = document.createElement("input");
     input.className = "magik-panel-title";
@@ -697,25 +754,38 @@ function upgradeWidget(widget, name) {
       if (origSetValue) origSetValue.call(options, v);
     };
     options.hideOnZoom = false;
-    options.getHeight = () => EDITOR_HEIGHT;
+    options.getHeight = () => editor.height;
     options.getMinHeight = () => MIN_HEIGHT;
-    options.getMaxHeight = () => EDITOR_HEIGHT;
+    options.getMaxHeight = () => editor.height;
 
     editor.onChange = (value) => {
       widget.value = value;
     };
 
-    editor.fontKeyFn = () => `magik-text.font.${widget.node?.id ?? "?"}.${name}`;
-    const loadFont = () => editor.loadFontSize();
     const node = widget.node;
+    editor.fontKeyFn = () => `magik-text.font.${node?.id ?? "?"}.${name}`;
+    editor.heightKeyFn = () => `magik-text.height.${node?.id ?? "?"}.${name}`;
+    editor.onHeightChanged = () => {
+      if (!node) return;
+      const cs = node.computeSize();
+      const cur = node.size ?? [0, 0];
+      node.setSize([Math.max(cur[0], cs[0]), Math.max(cur[1], cs[1])]);
+      node.setDirtyCanvas(true, true);
+      node.graph?.change?.();
+    };
+    const loadPrefs = () => {
+      editor.loadFontSize();
+      editor.loadHeight();
+      if (editor.onHeightChanged) editor.onHeightChanged();
+    };
     if (node) {
       if (node.graph) {
-        loadFont();
+        loadPrefs();
       } else {
         const prevOnAdded = node.onAdded;
         node.onAdded = function (...args) {
           const r = prevOnAdded?.apply(this, args);
-          loadFont();
+          loadPrefs();
           return r;
         };
       }

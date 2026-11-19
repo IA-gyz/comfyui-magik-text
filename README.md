@@ -35,8 +35,10 @@ textarea. It provides:
   `Ctrl+Shift+/` toggles a `/* ... */` block comment around the selection
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
-- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar,
-  persisted per panel in local storage), and a status bar with
+- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar),
+  and a per-panel height (drag the handle at the bottom of a panel, 120–600 px).
+  Both are persisted per panel in local storage (keyed by node id + widget
+  name) and restored on reload / tab switch. The status bar shows
   line/word/character counts, including the character count after comments
   are removed
 - **cards**: the card strip below the toolbar holds buttons with predefined
