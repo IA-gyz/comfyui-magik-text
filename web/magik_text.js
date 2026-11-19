@@ -478,18 +478,7 @@ class MagikTextEditor {
 
   insertCard(text) {
     const ta = this.ta;
-    const v = ta.value;
-    const s = ta.selectionStart;
-    const e = ta.selectionEnd;
-    const ls = this.lineStartIndex(s);
-    let le = v.indexOf("\n", e);
-    if (le === -1) le = v.length;
-    const before = v.slice(ls, s);
-    const after = v.slice(e, le);
-    let insert = text;
-    if (before.trim() !== "" && !insert.startsWith("\n")) insert = "\n" + insert;
-    if (after.trim() !== "" && !insert.endsWith("\n")) insert += "\n";
-    ta.setRangeText(insert, s, e, "end");
+    ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
     this.commit();
     ta.focus();
   }
