@@ -685,6 +685,7 @@ function setupPanelsNode(node) {
     return Number.isFinite(v) ? Math.min(MAX_PANELS, Math.max(1, v)) : 1;
   };
 
+  let initialized = false;
   let lastCount = 0;
   const syncPanels = () => {
     const n = getCount();
@@ -695,8 +696,14 @@ function setupPanelsNode(node) {
     const cs = node.computeSize();
     const cur = node.size ?? [0, 0];
     const w = Math.max(cur[0], cs[0]);
-    const h = n > lastCount ? Math.max(cur[1], cs[1]) : cs[1];
-    node.setSize([w, h]);
+    if (!initialized) {
+      initialized = true;
+      if (!node.graph) node.setSize([w, cs[1]]);
+    } else if (n > lastCount) {
+      node.setSize([w, Math.max(cur[1], cs[1])]);
+    } else if (n < lastCount) {
+      node.setSize([w, cs[1]]);
+    }
     lastCount = n;
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
