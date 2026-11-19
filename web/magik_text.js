@@ -673,13 +673,19 @@ function setupPanelsNode(node) {
     return Number.isFinite(v) ? Math.min(MAX_PANELS, Math.max(1, v)) : 1;
   };
 
+  let lastCount = 0;
   const syncPanels = () => {
     const n = getCount();
     firstEditor.setPanelsLabel(`${n} panel${n === 1 ? "" : "s"}`);
     textWidgets.forEach((widget, i) => setPanelVisible(widget, i < n));
     while (node.outputs.length > n) node.removeOutput(node.outputs.length - 1);
     while (node.outputs.length < n) node.addOutput(PANEL_NAMES[node.outputs.length], "STRING");
-    node.setSize(node.computeSize());
+    const cs = node.computeSize();
+    const cur = node.size ?? [0, 0];
+    const w = Math.max(cur[0], cs[0]);
+    const h = n > lastCount ? Math.max(cur[1], cs[1]) : cs[1];
+    node.setSize([w, h]);
+    lastCount = n;
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
   };
