@@ -191,32 +191,18 @@ const CSS = `
   white-space: pre;
   overflow-wrap: normal;
 }
-.magik-panels-ctrl {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  border-bottom: 1px solid var(--border-color, #333);
-  background: var(--comfy-menu-bg, #262626);
+.magik-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--border-color, #444);
 }
 .magik-panels-label {
-  margin-right: auto;
   font: 11px/1.6 monospace;
   color: var(--descrip-text, #888);
+  padding: 0 2px;
   user-select: none;
-}
-.magik-panels-ctrl button {
-  background: transparent;
-  color: var(--fg-color, #ddd);
-  border: 1px solid var(--border-color, #444);
-  border-radius: 4px;
-  font: 11px/1.6 monospace;
-  padding: 0 8px;
-  cursor: pointer;
-}
-.magik-panels-ctrl button:hover {
-  background: var(--comfy-input-bg, #383838);
+  white-space: nowrap;
 }
 .magik-c { color: #6a9955; font-style: italic; }
 .magik-w { color: #569cd6; }
@@ -317,6 +303,7 @@ class MagikTextEditor {
     this.root.style.setProperty("--comfy-widget-min-height", `${MIN_HEIGHT}px`);
 
     const toolbar = el("div", "magik-toolbar");
+    this.toolbar = toolbar;
     const btnLine = el("button", null, "#");
     btnLine.title = "Toggle line comment — Ctrl+/ (commented text is not output)";
     btnLine.addEventListener("click", () => this.toggleLineComment());
@@ -483,6 +470,25 @@ class MagikTextEditor {
     ta.focus();
   }
 
+  setPanelsControls(onAdd, onRemove) {
+    const sep = el("span", "magik-toolbar-sep");
+    this.panelLabel = el("span", "magik-panels-label", "");
+    const minus = el("button", null, "－");
+    minus.title = "Remove the last text panel (removes its output)";
+    minus.addEventListener("click", onRemove);
+    const plus = el("button", null, "＋");
+    plus.title = "Add a text panel (adds one output)";
+    plus.addEventListener("click", onAdd);
+    this.toolbar.insertBefore(sep, this.stats);
+    this.toolbar.insertBefore(this.panelLabel, this.stats);
+    this.toolbar.insertBefore(minus, this.stats);
+    this.toolbar.insertBefore(plus, this.stats);
+  }
+
+  setPanelsLabel(text) {
+    if (this.panelLabel) this.panelLabel.textContent = text;
+  }
+
   lineStartIndex(pos) {
     return pos > 0 ? this.ta.value.lastIndexOf("\n", pos - 1) + 1 : 0;
   }
@@ -624,8 +630,10 @@ function upgradeWidget(widget, name) {
     };
 
     widget.element = editor.root;
+    return editor;
   } catch (err) {
     console.warn("[magik-text] could not upgrade widget", name, err);
+    return null;
   }
 }
 
@@ -648,34 +656,15 @@ function setupPanelsNode(node) {
   setPanelVisible(countWidget, false, "number");
 
   const textWidgets = [];
+  let firstEditor = null;
   for (const name of PANEL_NAMES) {
     const widget = node.widgets?.find((w) => w.name === name && w.element);
-    if (widget) {
-      upgradeWidget(widget, name);
-      textWidgets.push(widget);
-    }
+    if (!widget) continue;
+    const editor = upgradeWidget(widget, name);
+    textWidgets.push(widget);
+    firstEditor ??= editor;
   }
-  if (textWidgets.length === 0) return;
-
-  const ctrl = el("div", "magik-panels-ctrl");
-  const label = el("span", "magik-panels-label", "");
-  const minus = el("button", null, "－");
-  minus.title = "Remove the last text panel (removes its output)";
-  const plus = el("button", null, "＋");
-  plus.title = "Add a text panel (adds one output)";
-  ctrl.append(label, minus, plus);
-
-  const ctrlWidget = node.addDOMWidget("panels_ctrl", "magik_panels_ctrl", ctrl, {
-    serialize: false,
-    hideOnZoom: false,
-    getValue: () => "",
-    setValue: () => {},
-    getHeight: () => 26,
-    getMinHeight: () => 26,
-  });
-  ctrlWidget.serialize = false;
-  node.widgets.splice(node.widgets.indexOf(ctrlWidget), 1);
-  node.widgets.splice(node.widgets.indexOf(countWidget) + 1, 0, ctrlWidget);
+  if (textWidgets.length === 0 || !firstEditor) return;
 
   const getCount = () => {
     const v = parseInt(countWidget.value, 10);
@@ -687,9 +676,10 @@ function setupPanelsNode(node) {
     textWidgets.forEach((widget, i) => setPanelVisible(widget, i < n));
     while (node.outputs.length > n) node.removeOutput(node.outputs.length - 1);
     while (node.outputs.length < n) node.addOutput(PANEL_NAMES[node.outputs.length], "STRING");
-    label.textContent = `${n} panel${n === 1 ? "" : "s"}`;
+    firstEditor.setPanelsLabel(`${n} panel${n === 1 ? "" : "s"}`);
     node.setSize(node.computeSize());
     node.setDirtyCanvas(true, true);
+    node.graph?.change?.();
   };
 
   const setCount = (n) => {
@@ -699,8 +689,10 @@ function setupPanelsNode(node) {
     syncPanels();
   };
 
-  minus.addEventListener("click", () => setCount(getCount() - 1));
-  plus.addEventListener("click", () => setCount(getCount() + 1));
+  firstEditor.setPanelsControls(
+    () => setCount(getCount() + 1),
+    () => setCount(getCount() - 1),
+  );
 
   const origCallback = countWidget.callback;
   countWidget.callback = (v) => {
