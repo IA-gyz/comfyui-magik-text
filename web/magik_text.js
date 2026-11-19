@@ -391,13 +391,25 @@ class MagikTextEditor {
       const startY = e.clientY;
       const startH = this.height;
       const move = (ev) => this.setHeight(startH + (ev.clientY - startY));
-      const up = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+      let ended = false;
+      const end = () => {
+        if (ended) return;
+        ended = true;
+        this.handle.removeEventListener("pointermove", move);
+        this.handle.removeEventListener("pointerup", end);
+        this.handle.removeEventListener("lostpointercapture", end);
+        document.removeEventListener("pointerup", end, true);
         if (this.onHeightChanged) this.onHeightChanged();
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      this.handle.addEventListener("pointermove", move);
+      this.handle.addEventListener("pointerup", end);
+      this.handle.addEventListener("lostpointercapture", end);
+      document.addEventListener("pointerup", end, true);
+      try {
+        this.handle.setPointerCapture(e.pointerId);
+      } catch {
+        // capture unsupported — the document-level pointerup fallback still ends the drag
+      }
     });
 
     this.root.append(toolbar, this.cardsRow, this.body, this.panel, this.handle);
