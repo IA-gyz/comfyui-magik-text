@@ -2,7 +2,6 @@ import { app } from "../../scripts/app.js";
 
 const EDITOR_HEIGHT = 200;
 const MIN_HEIGHT = 120;
-const MAX_EDITOR_HEIGHT = 600;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
@@ -14,6 +13,7 @@ const TEXT_FIELDS = {
 const PANELS_NODE = "Magik.Text";
 const MAX_PANELS = 10;
 const PANEL_NAMES = ["text", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `text${i + 2}`)];
+const WILDCARD_NAMES = ["wildcards", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `wildcards${i + 2}`)];
 const panelsControls = new WeakMap();
 
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
@@ -55,6 +55,10 @@ const CSS = `
 }
 .magik-toolbar button.active {
   border-color: var(--fg-color, #ddd);
+}
+.magik-toolbar button.magik-wild.active {
+  border-color: #c586c0;
+  color: #c586c0;
 }
 .magik-stats {
   margin-left: auto;
@@ -192,7 +196,7 @@ const CSS = `
   width: 72px;
   flex: 0 1 auto;
   background: transparent;
-  color: var(--fg-color, #ddd);
+  color: #c586c0;
   border: 1px solid transparent;
   border-radius: 4px;
   font: 11px/1.6 monospace;
@@ -300,6 +304,51 @@ function stripComments(text) {
     i++;
   }
   return out;
+}
+
+function processDynamicPrompt(input) {
+  const strip = (str) => str.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  let i = 0;
+  let result = "";
+  input = strip(input);
+  const handleEscape = () => {
+    const nextChar = input[i++];
+    return "\\" + nextChar;
+  };
+  function parseChoiceBlock() {
+    const options = [];
+    let choice = "";
+    let depth = 0;
+    while (i < input.length) {
+      const char = input[i++];
+      if (char === "\\") {
+        choice += handleEscape();
+        continue;
+      } else if (char === "{") {
+        depth++;
+      } else if (char === "}") {
+        if (!depth) break;
+        depth--;
+      } else if (char === "|") {
+        if (!depth) {
+          options.push(choice);
+          choice = "";
+          continue;
+        }
+      }
+      choice += char;
+    }
+    options.push(choice);
+    const chosen = options[Math.floor(Math.random() * options.length)];
+    return processDynamicPrompt(chosen);
+  }
+  while (i < input.length) {
+    const char = input[i++];
+    if (char === "\\") result += handleEscape();
+    else if (char === "{") result += parseChoiceBlock();
+    else result += char;
+  }
+  return result.replace(/\\([{}|])/g, "$1");
 }
 
 function loadCards() {
@@ -602,7 +651,7 @@ class MagikTextEditor {
   }
 
   setHeight(px, save = true) {
-    this.height = Math.min(MAX_EDITOR_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
+    this.height = Math.max(MIN_HEIGHT, Math.round(px));
     this.applyHeight();
     if (save && this.heightKeyFn) {
       try {
@@ -642,6 +691,23 @@ class MagikTextEditor {
     if (this.panelTitleInput && document.activeElement !== this.panelTitleInput) {
       this.panelTitleInput.value = title;
     }
+  }
+
+  setWildcardToggle(get, set) {
+    const btn = el("button", "magik-wild", "wild");
+    btn.title = "Wildcards: when on, {a|b} dynamic-prompt choices are expanded at queue time (ComfyUI rules)";
+    btn.addEventListener("click", () => {
+      const v = !(this.wildBtn && this.wildBtn.classList.contains("active"));
+      this.setWildcardValue(v);
+      set(v);
+    });
+    this.wildBtn = btn;
+    this.toolbar.insertBefore(btn, this.stats);
+    this.setWildcardValue(!!get());
+  }
+
+  setWildcardValue(v) {
+    if (this.wildBtn) this.wildBtn.classList.toggle("active", !!v);
   }
 
   setPanelsLabel(text) {
@@ -772,6 +838,7 @@ function upgradeWidget(widget, name) {
     options.getValue = () => editor.getValue();
     options.setValue = (v) => {
       editor.setValue(v == null ? "" : String(v));
+      if (widget._state) widget._state.value = v;
       if (origSetValue) origSetValue.call(options, v);
     };
     options.hideOnZoom = false;
@@ -858,6 +925,7 @@ function setupPanelsNode(node) {
 
   const textWidgets = [];
   const editors = [];
+  const wildWidgets = [];
   const titles = PANEL_NAMES.slice();
   let firstEditor = null;
   PANEL_NAMES.forEach((name, i) => {
@@ -870,6 +938,19 @@ function setupPanelsNode(node) {
     if (!firstEditor) firstEditor = editor;
     editor.setCloseButton(() => closePanel(i));
     editor.setPanelTitle(titles[i], (t) => renamePanel(i, t));
+    const ww = node.widgets?.find((w) => w.name === WILDCARD_NAMES[i]);
+    if (ww) {
+      wildWidgets[i] = ww;
+      setPanelVisible(ww, false, "toggle");
+      widget.dynamicPrompts = false;
+      widget.serializeValue = () => {
+        const v = editor.getValue();
+        return ww.value === true ? processDynamicPrompt(v) : v;
+      };
+      editor.setWildcardToggle(() => ww.value === true, (v) => {
+        ww.value = v;
+      });
+    }
   });
   if (textWidgets.length === 0 || !firstEditor) return;
 
@@ -908,6 +989,9 @@ function setupPanelsNode(node) {
         if (editors[i]) editors[i].setPanelTitleValue(name);
       }
     }
+    wildWidgets.forEach((w, i) => {
+      if (w && editors[i]) editors[i].setWildcardValue(w.value === true);
+    });
     const cs = node.computeSize();
     const cur = node.size ?? [0, 0];
     const w = Math.max(cur[0], cs[0]);
@@ -950,6 +1034,7 @@ function setupPanelsNode(node) {
     try {
       for (let j = i; j < n - 1; j++) {
         if (textWidgets[j + 1]) textWidgets[j].value = textWidgets[j + 1].value;
+        if (wildWidgets[j + 1]) wildWidgets[j].value = wildWidgets[j + 1].value;
         titles[j] = titles[j + 1] ?? PANEL_NAMES[j];
         const out = node.outputs[j];
         if (out) {
@@ -958,6 +1043,7 @@ function setupPanelsNode(node) {
         }
       }
       if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
+      if (wildWidgets[n - 1]) wildWidgets[n - 1].value = false;
       setCount(n - 1);
     } catch (err) {
       console.error("[magik-text] could not close panel", err);
