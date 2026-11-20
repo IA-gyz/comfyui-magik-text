@@ -25,6 +25,11 @@ def _wildcard_names():
     return ["wildcards"] + [f"wildcards{i}" for i in range(2, PANEL_COUNT + 1)]
 
 
+def _collapse_names():
+    """Per-panel collapse toggle names. Collapsed state is frontend-only."""
+    return ["collapse"] + [f"collapse{i}" for i in range(2, PANEL_COUNT + 1)]
+
+
 class MagikText(io.ComfyNode):
     """Multiline text with a dynamic number of panels/outputs.
 
@@ -53,6 +58,15 @@ class MagikText(io.ComfyNode):
             )
             for name in _wildcard_names()
         ]
+        inputs += [
+            io.Boolean.Input(
+                name,
+                default=False,
+                optional=True,
+                tooltip="When on, this panel is collapsed (editor hidden, only the toolbar shows)",
+            )
+            for name in _collapse_names()
+        ]
         outputs = [io.String.Output(name) for name in names]
         return io.Schema(
             node_id="Magik.Text",
@@ -65,7 +79,9 @@ class MagikText(io.ComfyNode):
     @classmethod
     def execute(cls, count, text, text2, text3, text4, text5, text6, text7, text8, text9, text10,
                 wildcards, wildcards2, wildcards3, wildcards4, wildcards5,
-                wildcards6, wildcards7, wildcards8, wildcards9, wildcards10):
+                wildcards6, wildcards7, wildcards8, wildcards9, wildcards10,
+                collapse, collapse2, collapse3, collapse4, collapse5,
+                collapse6, collapse7, collapse8, collapse9, collapse10):
         raw = (text, text2, text3, text4, text5, text6, text7, text8, text9, text10)
         stripped = [strip_comments(_clean(t)) for t in raw]
         return io.NodeOutput(*panel_outputs(count, stripped, PANEL_COUNT))
