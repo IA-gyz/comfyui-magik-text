@@ -35,7 +35,7 @@ textarea. It provides:
   `Ctrl+Shift+/` toggles a `/* ... */` block comment around the selection
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
-- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar),
+- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar, min 8 px, no upper limit),
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
   Both are persisted per panel in local storage (keyed by node id + widget
   name) and restored on reload / tab switch. The status bar shows
@@ -52,7 +52,11 @@ textarea. It provides:
   escapes work, `/* */` and `//` comments are stripped, exactly like ComfyUI's
   built-in dynamic prompts). When off, the text is sent verbatim.
 - **panel title**: the input at the far left of each panel's toolbar is the
-  panel's title; renaming it renames the corresponding output slot.
+  panel's title; renaming it changes the **label** of the corresponding output
+  slot (the output's internal name stays `text`, `text2`, …).
+- **collapsible panels**: the `▾` button in each panel's toolbar collapses the
+  panel (only the toolbar stays visible, the node shrinks accordingly). The
+  state is stored per panel in the workflow and restored on reload / tab switch.
 
 ## Comments
 

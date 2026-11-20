@@ -2,6 +2,7 @@ import { app } from "../../scripts/app.js";
 
 const EDITOR_HEIGHT = 200;
 const MIN_HEIGHT = 120;
+const COLLAPSED_HEIGHT = 28;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
@@ -14,6 +15,7 @@ const PANELS_NODE = "Magik.Text";
 const MAX_PANELS = 10;
 const PANEL_NAMES = ["text", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `text${i + 2}`)];
 const WILDCARD_NAMES = ["wildcards", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `wildcards${i + 2}`)];
+const COLLAPSE_NAMES = ["collapse", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `collapse${i + 2}`)];
 const panelsControls = new WeakMap();
 
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
@@ -244,6 +246,11 @@ const CSS = `
 .magik-resize-handle.magik-dragging {
   background: var(--border-color, #555);
 }
+.magik-text-editor.magik-collapsed .magik-body,
+.magik-text-editor.magik-collapsed .magik-cards,
+.magik-text-editor.magik-collapsed .magik-resize-handle {
+  display: none;
+}
 .magik-c { color: #6a9955; font-style: italic; }
 .magik-w { color: #569cd6; }
 .magik-a { color: #ce9178; }
@@ -385,6 +392,7 @@ class MagikTextEditor {
 
     this.root = el("div", "magik-text-editor");
     this.height = EDITOR_HEIGHT;
+    this.collapsed = false;
     this.heightKeyFn = null;
     this.onHeightChanging = null;
     this.onHeightChanged = null;
@@ -618,11 +626,38 @@ class MagikTextEditor {
     const btn = el("button", "magik-close", "✕");
     btn.title = "Close this panel (removes its output; blocked while the output is connected)";
     btn.addEventListener("click", onClose);
+    this.closeBtn = btn;
     this.toolbar.appendChild(btn);
   }
 
+  setCollapseControl(get, set) {
+    const btn = el("button", "magik-collapse", "▾");
+    btn.title = "Collapse / expand this panel";
+    btn.addEventListener("click", () => {
+      const v = !this.collapsed;
+      this.setCollapsed(v);
+      set(v);
+      if (this.onHeightChanged) this.onHeightChanged(true);
+    });
+    this.collapseBtn = btn;
+    if (this.closeBtn) this.toolbar.insertBefore(btn, this.closeBtn);
+    else this.toolbar.appendChild(btn);
+    this.setCollapsed(!!get());
+  }
+
+  setCollapsed(c) {
+    this.collapsed = !!c;
+    this.root.classList.toggle("magik-collapsed", this.collapsed);
+    if (this.collapseBtn) this.collapseBtn.textContent = this.collapsed ? "▸" : "▾";
+    this.applyHeight();
+  }
+
+  currentHeight() {
+    return this.collapsed ? COLLAPSED_HEIGHT : this.height;
+  }
+
   setFontSize(px, save = true) {
-    this.fontSize = Math.min(24, Math.max(8, Math.round(px)));
+    this.fontSize = Math.max(8, Math.round(px));
     this.pre.style.fontSize = `${this.fontSize}px`;
     this.ta.style.fontSize = `${this.fontSize}px`;
     if (save && this.fontKeyFn) {
@@ -645,9 +680,10 @@ class MagikTextEditor {
   }
 
   applyHeight() {
-    this.root.style.setProperty("--comfy-widget-height", `${this.height}px`);
-    this.root.style.setProperty("--comfy-widget-min-height", `${this.height}px`);
-    this.root.style.setProperty("--comfy-widget-max-height", `${this.height}px`);
+    const h = this.currentHeight();
+    this.root.style.setProperty("--comfy-widget-height", `${h}px`);
+    this.root.style.setProperty("--comfy-widget-min-height", `${h}px`);
+    this.root.style.setProperty("--comfy-widget-max-height", `${h}px`);
   }
 
   setHeight(px, save = true) {
@@ -842,9 +878,9 @@ function upgradeWidget(widget, name) {
       if (origSetValue) origSetValue.call(options, v);
     };
     options.hideOnZoom = false;
-    options.getHeight = () => editor.height;
-    options.getMinHeight = () => editor.height;
-    options.getMaxHeight = () => editor.height;
+    options.getHeight = () => editor.currentHeight();
+    options.getMinHeight = () => editor.currentHeight();
+    options.getMaxHeight = () => editor.currentHeight();
 
     editor.onChange = (value) => {
       widget.value = value;
@@ -926,6 +962,7 @@ function setupPanelsNode(node) {
   const textWidgets = [];
   const editors = [];
   const wildWidgets = [];
+  const collapseWidgets = [];
   const titles = PANEL_NAMES.slice();
   let firstEditor = null;
   PANEL_NAMES.forEach((name, i) => {
@@ -951,16 +988,21 @@ function setupPanelsNode(node) {
         ww.value = v;
       });
     }
+    const cw = node.widgets?.find((w) => w.name === COLLAPSE_NAMES[i]);
+    if (cw) {
+      collapseWidgets[i] = cw;
+      setPanelVisible(cw, false, "toggle");
+      editor.setCollapseControl(() => cw.value === true, (v) => {
+        cw.value = v;
+      });
+    }
   });
   if (textWidgets.length === 0 || !firstEditor) return;
 
   const renamePanel = (i, title) => {
     titles[i] = title;
     const out = node.outputs[i];
-    if (out) {
-      out.name = title;
-      out.label = title;
-    }
+    if (out) out.label = title;
     node.setDirtyCanvas(true, true);
   };
 
@@ -979,18 +1021,22 @@ function setupPanelsNode(node) {
     while (node.outputs.length < n) {
       const idx = node.outputs.length;
       const title = titles[idx] ?? PANEL_NAMES[idx];
-      const out = node.addOutput(title, "STRING");
+      const out = node.addOutput(PANEL_NAMES[idx] ?? title, "STRING");
       if (out) out.label = title;
     }
     for (let i = 0; i < node.outputs.length; i++) {
-      const name = node.outputs[i]?.name;
-      if (name) {
-        titles[i] = name;
-        if (editors[i]) editors[i].setPanelTitleValue(name);
+      const out = node.outputs[i];
+      const label = out?.label || out?.name;
+      if (label) {
+        titles[i] = label;
+        if (editors[i]) editors[i].setPanelTitleValue(label);
       }
     }
     wildWidgets.forEach((w, i) => {
       if (w && editors[i]) editors[i].setWildcardValue(w.value === true);
+    });
+    collapseWidgets.forEach((w, i) => {
+      if (w && editors[i]) editors[i].setCollapsed(w.value === true);
     });
     const cs = node.computeSize();
     const cur = node.size ?? [0, 0];
@@ -1035,15 +1081,14 @@ function setupPanelsNode(node) {
       for (let j = i; j < n - 1; j++) {
         if (textWidgets[j + 1]) textWidgets[j].value = textWidgets[j + 1].value;
         if (wildWidgets[j + 1]) wildWidgets[j].value = wildWidgets[j + 1].value;
+        if (collapseWidgets[j + 1]) collapseWidgets[j].value = collapseWidgets[j + 1].value;
         titles[j] = titles[j + 1] ?? PANEL_NAMES[j];
         const out = node.outputs[j];
-        if (out) {
-          out.name = titles[j];
-          out.label = titles[j];
-        }
+        if (out) out.label = titles[j];
       }
       if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
       if (wildWidgets[n - 1]) wildWidgets[n - 1].value = false;
+      if (collapseWidgets[n - 1]) collapseWidgets[n - 1].value = false;
       setCount(n - 1);
     } catch (err) {
       console.error("[magik-text] could not close panel", err);
