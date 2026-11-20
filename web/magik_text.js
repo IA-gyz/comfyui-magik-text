@@ -251,6 +251,27 @@ const CSS = `
 .magik-text-editor.magik-collapsed .magik-resize-handle {
   display: none;
 }
+.magik-text-editor.magik-collapsed {
+  cursor: pointer;
+}
+.magik-text-editor.magik-collapsed .magik-collapse {
+  border-color: #c586c0;
+  color: #c586c0;
+  font-weight: bold;
+  padding: 0 10px;
+}
+.magik-color {
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.magik-color:hover {
+  border-color: var(--border-color, #444);
+}
 .magik-c { color: #6a9955; font-style: italic; }
 .magik-w { color: #569cd6; }
 .magik-a { color: #ce9178; }
@@ -394,12 +415,22 @@ class MagikTextEditor {
     this.height = EDITOR_HEIGHT;
     this.collapsed = false;
     this.heightKeyFn = null;
+    this.alignKeyFn = null;
+    this.colorKeyFn = null;
+    this.collapseSet = null;
     this.onHeightChanging = null;
     this.onHeightChanged = null;
     this.applyHeight();
 
     const toolbar = el("div", "magik-toolbar");
     this.toolbar = toolbar;
+    toolbar.addEventListener("click", (e) => {
+      if (this.collapsed && e.target === toolbar && this.collapseSet) {
+        this.setCollapsed(false);
+        this.collapseSet(false);
+        if (this.onHeightChanged) this.onHeightChanged(true);
+      }
+    });
     const btnLine = el("button", null, "#");
     btnLine.title = "Toggle line comment — Ctrl+/ (commented text is not output)";
     btnLine.addEventListener("click", () => this.toggleLineComment());
@@ -418,11 +449,24 @@ class MagikTextEditor {
     const fontUp = el("button", null, "A+");
     fontUp.title = "Increase font size";
     fontUp.addEventListener("click", () => this.setFontSize(this.fontSize + 1));
+    this.alignBtn = el("button", "magik-align", "L");
+    this.alignBtn.title = "Text alignment: click to cycle left / center / right";
+    this.alignBtn.addEventListener("click", () => {
+      const order = ["left", "center", "right"];
+      this.setAlign(order[(order.indexOf(this.align) + 1) % order.length]);
+    });
+    this.colorInput = document.createElement("input");
+    this.colorInput.type = "color";
+    this.colorInput.className = "magik-color";
+    this.colorInput.value = "#dddddd";
+    this.colorInput.title = "Text font color";
+    this.colorInput.addEventListener("change", () => this.setFontColor(this.colorInput.value));
     this.stats = el("span", "magik-stats");
-    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.stats);
+    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.alignBtn, this.colorInput, this.stats);
 
     this.fontSize = 12;
     this.fontKeyFn = null;
+    this.align = "left";
 
     this.cardsRow = el("div", "magik-cards");
     this.renderCards();
@@ -439,6 +483,7 @@ class MagikTextEditor {
     this.ta.setAttribute("data-testid", "magik-text-editor-input");
     this.body.append(this.pre, this.ta);
     this.setFontSize(12, false);
+    this.setAlign("left", false);
 
     this.panel = el("div", "magik-panel");
     this.panel.style.display = "none";
@@ -640,6 +685,7 @@ class MagikTextEditor {
       if (this.onHeightChanged) this.onHeightChanged(true);
     });
     this.collapseBtn = btn;
+    this.collapseSet = set;
     if (this.closeBtn) this.toolbar.insertBefore(btn, this.closeBtn);
     else this.toolbar.appendChild(btn);
     this.setCollapsed(!!get());
@@ -674,6 +720,53 @@ class MagikTextEditor {
     try {
       const v = parseInt(localStorage.getItem(this.fontKeyFn()) || "", 10);
       if (Number.isFinite(v)) this.setFontSize(v, false);
+    } catch {
+      // ignore
+    }
+  }
+
+  setAlign(mode, save = true) {
+    if (!["left", "center", "right"].includes(mode)) mode = "left";
+    this.align = mode;
+    this.ta.style.textAlign = mode;
+    this.pre.style.textAlign = mode;
+    if (this.alignBtn) this.alignBtn.textContent = mode === "left" ? "L" : mode === "center" ? "C" : "R";
+    if (save && this.alignKeyFn) {
+      try {
+        localStorage.setItem(this.alignKeyFn(), mode);
+      } catch {
+        // storage unavailable — alignment stays session-local
+      }
+    }
+  }
+
+  loadAlign() {
+    if (!this.alignKeyFn) return;
+    try {
+      const v = localStorage.getItem(this.alignKeyFn());
+      if (v) this.setAlign(v, false);
+    } catch {
+      // ignore
+    }
+  }
+
+  setFontColor(hex, save = true) {
+    this.pre.style.color = hex;
+    if (this.colorInput && this.colorInput.value !== hex) this.colorInput.value = hex;
+    if (save && this.colorKeyFn) {
+      try {
+        localStorage.setItem(this.colorKeyFn(), hex);
+      } catch {
+        // storage unavailable — color stays session-local
+      }
+    }
+  }
+
+  loadFontColor() {
+    if (!this.colorKeyFn) return;
+    try {
+      const v = localStorage.getItem(this.colorKeyFn());
+      if (v) this.setFontColor(v, false);
     } catch {
       // ignore
     }
@@ -889,6 +982,8 @@ function upgradeWidget(widget, name) {
     const node = widget.node;
     editor.fontKeyFn = () => `magik-text.font.${node?.id ?? "?"}.${name}`;
     editor.heightKeyFn = () => `magik-text.height.${node?.id ?? "?"}.${name}`;
+    editor.alignKeyFn = () => `magik-text.align.${node?.id ?? "?"}.${name}`;
+    editor.colorKeyFn = () => `magik-text.color.${node?.id ?? "?"}.${name}`;
     const growNode = () => {
       if (!node) return;
       const cs = node.computeSize();
@@ -909,6 +1004,8 @@ function upgradeWidget(widget, name) {
     const loadPrefs = () => {
       editor.loadFontSize();
       editor.loadHeight();
+      editor.loadAlign();
+      editor.loadFontColor();
       if (editor.onHeightChanged) editor.onHeightChanged();
     };
     if (node) {

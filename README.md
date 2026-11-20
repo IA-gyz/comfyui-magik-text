@@ -36,9 +36,11 @@ textarea. It provides:
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
 - word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar, min 8 px, no upper limit),
+  a per-panel text alignment (`L` button cycles left / center / right) and a per-panel font color
+  (the color picker in the toolbar),
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
-  Both are persisted per panel in local storage (keyed by node id + widget
-  name) and restored on reload / tab switch. The status bar shows
+  Font size, alignment, color and height are persisted per panel in local storage (keyed by node id +
+  widget name) and restored on reload / tab switch. The status bar shows
   line/word/character counts, including the character count after comments
   are removed
 - **cards**: the card strip below the toolbar holds buttons with predefined
@@ -55,7 +57,8 @@ textarea. It provides:
   panel's title; renaming it changes the **label** of the corresponding output
   slot (the output's internal name stays `text`, `text2`, …).
 - **collapsible panels**: the `▾` button in each panel's toolbar collapses the
-  panel (only the toolbar stays visible, the node shrinks accordingly). The
+  panel (only the toolbar stays visible, the node shrinks accordingly; the
+  collapsed row is highlighted and clicking it expands the panel again). The
   state is stored per panel in the workflow and restored on reload / tab switch.
 
 ## Comments
