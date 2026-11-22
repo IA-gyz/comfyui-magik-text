@@ -2,7 +2,7 @@ import { app } from "../../scripts/app.js";
 
 const EDITOR_HEIGHT = 200;
 const MIN_HEIGHT = 120;
-const COLLAPSED_HEIGHT = 28;
+const COLLAPSED_HEIGHT = 48;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
