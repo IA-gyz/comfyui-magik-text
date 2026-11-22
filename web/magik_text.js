@@ -3,6 +3,7 @@ import { app } from "../../scripts/app.js";
 const EDITOR_HEIGHT = 200;
 const MIN_HEIGHT = 120;
 const COLLAPSED_HEIGHT = 48;
+const DEFAULT_FONT_SIZE = 24;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
@@ -166,7 +167,7 @@ const CSS = `
   border: 0;
   padding: 6px 8px;
   font-family: monospace;
-  font-size: 12px;
+  font-size: 24px;
   line-height: 1.5;
   tab-size: 4;
   white-space: pre-wrap;
@@ -195,13 +196,13 @@ const CSS = `
   outline: none;
 }
 .magik-panel-title {
-  width: 72px;
+  width: 110px;
   flex: 0 1 auto;
   background: transparent;
   color: #c586c0;
   border: 1px solid transparent;
   border-radius: 4px;
-  font: 11px/1.6 monospace;
+  font: bold 14px/1.6 monospace;
   padding: 0 4px;
 }
 .magik-panel-title:hover,
@@ -259,6 +260,14 @@ const CSS = `
   color: #c586c0;
   font-weight: bold;
   padding: 0 10px;
+}
+.magik-text-editor.magik-connected {
+  border-color: #569cd6;
+  box-shadow: 0 0 0 1px #569cd6;
+}
+.magik-text-editor.magik-connected .magik-panel-title {
+  color: #569cd6;
+  border-color: #569cd6;
 }
 .magik-color {
   width: 22px;
@@ -464,7 +473,7 @@ class MagikTextEditor {
     this.stats = el("span", "magik-stats");
     toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.alignBtn, this.colorInput, this.stats);
 
-    this.fontSize = 12;
+    this.fontSize = DEFAULT_FONT_SIZE;
     this.fontKeyFn = null;
     this.align = "left";
 
@@ -482,7 +491,7 @@ class MagikTextEditor {
     this.ta.placeholder = placeholder;
     this.ta.setAttribute("data-testid", "magik-text-editor-input");
     this.body.append(this.pre, this.ta);
-    this.setFontSize(12, false);
+    this.setFontSize(DEFAULT_FONT_SIZE, false);
     this.setAlign("left", false);
 
     this.panel = el("div", "magik-panel");
@@ -700,6 +709,11 @@ class MagikTextEditor {
 
   currentHeight() {
     return this.collapsed ? COLLAPSED_HEIGHT : this.height;
+  }
+
+  setConnected(v) {
+    this.connected = !!v;
+    this.root.classList.toggle("magik-connected", this.connected);
   }
 
   setFontSize(px, save = true) {
@@ -1135,6 +1149,7 @@ function setupPanelsNode(node) {
     collapseWidgets.forEach((w, i) => {
       if (w && editors[i]) editors[i].setCollapsed(w.value === true);
     });
+    syncConnections();
     const cs = node.computeSize();
     const cur = node.size ?? [0, 0];
     const w = Math.max(cur[0], cs[0]);
@@ -1149,6 +1164,19 @@ function setupPanelsNode(node) {
     lastCount = n;
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
+  };
+
+  const panelConnected = (i) => {
+    const input = node.inputs?.find((inp) => inp.name === PANEL_NAMES[i] && inp.link != null);
+    if (input) return true;
+    if (node.isOutputConnected) return !!node.isOutputConnected(i);
+    return (node.outputs?.[i]?.links?.length ?? 0) > 0;
+  };
+
+  const syncConnections = () => {
+    editors.forEach((editor, i) => {
+      if (editor) editor.setConnected(panelConnected(i));
+    });
   };
 
   const setCount = (n) => {
@@ -1207,6 +1235,16 @@ function setupPanelsNode(node) {
       syncPanels();
     } catch (err) {
       console.error("[magik-text] panel sync failed", err);
+    }
+  };
+
+  const prevOnConnectionsChange = node.onConnectionsChange;
+  node.onConnectionsChange = function (...args) {
+    if (prevOnConnectionsChange) prevOnConnectionsChange.apply(this, args);
+    try {
+      syncConnections();
+    } catch (err) {
+      console.error("[magik-text] connection sync failed", err);
     }
   };
 

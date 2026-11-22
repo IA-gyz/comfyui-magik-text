@@ -11,7 +11,10 @@ and support for comments inside prompts.
   toolbar (or the node's right-click menu) to add a panel — each new panel adds
   one output, up to 10. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
-  whose output is connected cannot be closed. Each panel has an editable title
+  whose output is connected cannot be closed. Panels that are in use — their
+  output is connected to another node's input, or their text field is converted
+  to an input and linked — are highlighted with an accent border and title, so
+  connected panels stand out at a glance. Each panel has an editable title
   field (left of its toolbar); renaming it renames the panel's output, and the
   name is saved in the workflow. Closing a panel shifts the titles and values
   of the panels above it up, so outputs keep matching their titles. The first
@@ -35,7 +38,7 @@ textarea. It provides:
   `Ctrl+Shift+/` toggles a `/* ... */` block comment around the selection
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
-- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar, min 8 px, no upper limit),
+- word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar, default 24 px, min 8 px, no upper limit),
   a per-panel text alignment (`L` button cycles left / center / right) and a per-panel font color
   (the color picker in the toolbar),
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
