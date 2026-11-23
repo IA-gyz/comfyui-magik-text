@@ -416,6 +416,10 @@ function el(tag, className, text) {
   return node;
 }
 
+function canvasScale() {
+  return app.canvas?.ds?.scale || app.canvas?.scale || 1;
+}
+
 class MagikTextEditor {
   constructor(placeholder) {
     injectStyles();
@@ -506,7 +510,7 @@ class MagikTextEditor {
       const startH = this.height;
       this.handle.classList.add("magik-dragging");
       const move = (ev) => {
-        this.setHeight(startH + (ev.clientY - startY), false);
+        this.setHeight(startH + (ev.clientY - startY) / canvasScale(), false);
         if (this.onHeightChanging) this.onHeightChanging();
       };
       let ended = false;
