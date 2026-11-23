@@ -11,10 +11,12 @@ and support for comments inside prompts.
   toolbar (or the node's right-click menu) to add a panel — each new panel adds
   one output, up to 10. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
-  whose output is connected cannot be closed. Panels that are in use — their
-  output is connected to another node's input, or their text field is converted
-  to an input and linked — are highlighted with an accent border and title, so
-  connected panels stand out at a glance. Each panel has an editable title
+  whose output is connected cannot be closed. Each panel also has a ⧉ duplicate
+  button; duplicating adds a copy of the panel (text, wildcards, collapsed state
+  and title) as a new panel after the last one, up to 10 panels. Panels that are
+  in use — their output is connected to another node's input, or their text field
+  is converted to an input and linked — are highlighted with a prominent glowing
+  border and title, so connected panels stand out at a glance. Each panel has an editable title
   field (left of its toolbar); renaming it renames the panel's output, and the
   name is saved in the workflow. Closing a panel shifts the titles and values
   of the panels above it up, so outputs keep matching their titles. The first
@@ -43,7 +45,10 @@ textarea. It provides:
   (the color picker in the toolbar),
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
   Font size, alignment, color and height are persisted per panel in local storage (keyed by node id +
-  widget name) and restored on reload / tab switch. The status bar shows
+  widget name) and restored on reload / tab switch. There is also a global UI size setting
+  (`UI−` / `UI+` in the toolbar): one value for all panels that scales the whole panel UI
+  (toolbar, cards, text and handle) at once, persisted in local storage under a single global
+  key and applied to every Magik text editor, independent of the per-panel font size. The status bar shows
   line/word/character counts, including the character count after comments
   are removed
 - **cards**: the card strip below the toolbar holds buttons with predefined

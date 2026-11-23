@@ -7,6 +7,9 @@ const DEFAULT_FONT_SIZE = 24;
 const INDENT = "  ";
 const CARDS_KEY = "magik-text.cards.v1";
 const CARDS_EVENT = "magik-text-cards-changed";
+const UI_SCALE_KEY = "magik-text.ui-scale.v1";
+const UI_SCALE_EVENT = "magik-text-ui-scale-changed";
+const UI_SCALE_STEPS = [0.75, 0.85, 1, 1.15, 1.3, 1.5, 1.75, 2];
 
 const TEXT_FIELDS = {
   "Magik.Text7Concat": ["text1", "text2", "text3", "text4", "text5", "text6", "text7"],
@@ -262,12 +265,14 @@ const CSS = `
   padding: 0 10px;
 }
 .magik-text-editor.magik-connected {
-  border-color: #569cd6;
-  box-shadow: 0 0 0 1px #569cd6;
+  border: 2px solid #4da3ff;
+  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.6), 0 0 16px 4px rgba(77, 163, 255, 0.55), inset 0 0 10px rgba(77, 163, 255, 0.25);
 }
 .magik-text-editor.magik-connected .magik-panel-title {
-  color: #569cd6;
-  border-color: #569cd6;
+  color: #4da3ff;
+  border-color: #4da3ff;
+  font-weight: bold;
+  text-shadow: 0 0 6px rgba(77, 163, 255, 0.8);
 }
 .magik-color {
   width: 22px;
@@ -409,6 +414,33 @@ function saveCards() {
   window.dispatchEvent(new CustomEvent(CARDS_EVENT));
 }
 
+function loadUiScale() {
+  try {
+    const v = parseFloat(localStorage.getItem(UI_SCALE_KEY) || "");
+    if (Number.isFinite(v) && v > 0) return v;
+  } catch {}
+  return 1;
+}
+
+let uiScale = loadUiScale();
+
+function saveUiScale() {
+  try {
+    localStorage.setItem(UI_SCALE_KEY, String(uiScale));
+  } catch {}
+  window.dispatchEvent(new CustomEvent(UI_SCALE_EVENT));
+}
+
+function stepUiScale(dir) {
+  let best = 0;
+  for (let i = 0; i < UI_SCALE_STEPS.length; i++) {
+    if (Math.abs(UI_SCALE_STEPS[i] - uiScale) < Math.abs(UI_SCALE_STEPS[best] - uiScale)) best = i;
+  }
+  best = Math.min(UI_SCALE_STEPS.length - 1, Math.max(0, best + dir));
+  uiScale = UI_SCALE_STEPS[best];
+  saveUiScale();
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -434,6 +466,7 @@ class MagikTextEditor {
     this.onHeightChanging = null;
     this.onHeightChanged = null;
     this.applyHeight();
+    this.applyUiScale();
 
     const toolbar = el("div", "magik-toolbar");
     this.toolbar = toolbar;
@@ -462,6 +495,13 @@ class MagikTextEditor {
     const fontUp = el("button", null, "A+");
     fontUp.title = "Increase font size";
     fontUp.addEventListener("click", () => this.setFontSize(this.fontSize + 1));
+    const uiPct = `${Math.round(uiScale * 100)}%`;
+    this.uiDownBtn = el("button", "magik-ui-size", "UI−");
+    this.uiDownBtn.title = `Decrease UI size of all panels — global setting (currently ${uiPct})`;
+    this.uiDownBtn.addEventListener("click", () => stepUiScale(-1));
+    this.uiUpBtn = el("button", "magik-ui-size", "UI+");
+    this.uiUpBtn.title = `Increase UI size of all panels — global setting (currently ${uiPct})`;
+    this.uiUpBtn.addEventListener("click", () => stepUiScale(1));
     this.alignBtn = el("button", "magik-align", "L");
     this.alignBtn.title = "Text alignment: click to cycle left / center / right";
     this.alignBtn.addEventListener("click", () => {
@@ -475,7 +515,7 @@ class MagikTextEditor {
     this.colorInput.title = "Text font color";
     this.colorInput.addEventListener("change", () => this.setFontColor(this.colorInput.value));
     this.stats = el("span", "magik-stats");
-    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.alignBtn, this.colorInput, this.stats);
+    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.uiDownBtn, this.uiUpBtn, this.alignBtn, this.colorInput, this.stats);
 
     this.fontSize = DEFAULT_FONT_SIZE;
     this.fontKeyFn = null;
@@ -545,6 +585,8 @@ class MagikTextEditor {
     this.ta.addEventListener("keydown", (e) => this.onKeydown(e));
     this.cardsListener = () => this.renderCards();
     window.addEventListener(CARDS_EVENT, this.cardsListener);
+    this.uiScaleListener = () => this.applyUiScale();
+    window.addEventListener(UI_SCALE_EVENT, this.uiScaleListener);
   }
 
   getValue() {
@@ -688,6 +730,15 @@ class MagikTextEditor {
     this.toolbar.appendChild(btn);
   }
 
+  setDuplicateButton(onDuplicate) {
+    const btn = el("button", "magik-duplicate", "⧉");
+    btn.title = "Duplicate this panel (adds a copy after the last panel)";
+    btn.addEventListener("click", onDuplicate);
+    this.duplicateBtn = btn;
+    if (this.closeBtn) this.toolbar.insertBefore(btn, this.closeBtn);
+    else this.toolbar.appendChild(btn);
+  }
+
   setCollapseControl(get, set) {
     const btn = el("button", "magik-collapse", "▾");
     btn.title = "Collapse / expand this panel";
@@ -795,6 +846,15 @@ class MagikTextEditor {
     this.root.style.setProperty("--comfy-widget-height", `${h}px`);
     this.root.style.setProperty("--comfy-widget-min-height", `${h}px`);
     this.root.style.setProperty("--comfy-widget-max-height", `${h}px`);
+  }
+
+  applyUiScale() {
+    const s = uiScale;
+    this.root.style.zoom = String(s);
+    this.root.style.height = s === 1 ? "" : `calc(100% / ${s})`;
+    const pct = `${Math.round(s * 100)}%`;
+    if (this.uiDownBtn) this.uiDownBtn.title = `Decrease UI size of all panels — global setting (currently ${pct})`;
+    if (this.uiUpBtn) this.uiUpBtn.title = `Increase UI size of all panels — global setting (currently ${pct})`;
   }
 
   setHeight(px, save = true) {
@@ -1042,6 +1102,7 @@ function upgradeWidget(widget, name) {
     const origOnRemove = widget.onRemove?.bind(widget);
     widget.onRemove = () => {
       window.removeEventListener(CARDS_EVENT, editor.cardsListener);
+      window.removeEventListener(UI_SCALE_EVENT, editor.uiScaleListener);
       if (origOnRemove) origOnRemove();
     };
 
@@ -1089,6 +1150,7 @@ function setupPanelsNode(node) {
     editors[i] = editor;
     if (!firstEditor) firstEditor = editor;
     editor.setCloseButton(() => closePanel(i));
+    editor.setDuplicateButton(() => duplicatePanel(i));
     editor.setPanelTitle(titles[i], (t) => renamePanel(i, t));
     const ww = node.widgets?.find((w) => w.name === WILDCARD_NAMES[i]);
     if (ww) {
@@ -1224,6 +1286,24 @@ function setupPanelsNode(node) {
     }
   };
 
+  const duplicatePanel = (i) => {
+    const n = getCount();
+    if (i >= n || !textWidgets[i]) return;
+    if (n >= MAX_PANELS) {
+      console.warn(`[magik-text] cannot duplicate panel: already at the maximum of ${MAX_PANELS} panels`);
+      return;
+    }
+    try {
+      if (textWidgets[n]) textWidgets[n].value = textWidgets[i].value;
+      if (wildWidgets[n]) wildWidgets[n].value = wildWidgets[i] ? wildWidgets[i].value : false;
+      if (collapseWidgets[n]) collapseWidgets[n].value = collapseWidgets[i] ? collapseWidgets[i].value : false;
+      titles[n] = titles[i] ?? PANEL_NAMES[i];
+      setCount(n + 1);
+    } catch (err) {
+      console.error("[magik-text] could not duplicate panel", err);
+    }
+  };
+
   firstEditor.setPanelsControls(() => setCount(getCount() + 1));
 
   const origCallback = countWidget.callback;
@@ -1252,7 +1332,7 @@ function setupPanelsNode(node) {
     }
   };
 
-  panelsControls.set(node, { getCount, setCount, sync: syncPanels, closePanel });
+  panelsControls.set(node, { getCount, setCount, sync: syncPanels, closePanel, duplicatePanel });
   syncPanels();
 }
 
