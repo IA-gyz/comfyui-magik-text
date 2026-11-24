@@ -72,6 +72,7 @@ class MagikText(io.ComfyNode):
                 "links",
                 default="[]",
                 multiline=False,
+                optional=True,
                 tooltip="Serialized list of panel index pairs to concatenate (managed by the frontend)",
             )
         )
@@ -91,7 +92,7 @@ class MagikText(io.ComfyNode):
                 wildcards6, wildcards7, wildcards8, wildcards9, wildcards10,
                 collapse, collapse2, collapse3, collapse4, collapse5,
                 collapse6, collapse7, collapse8, collapse9, collapse10,
-                links):
+                links="[]"):
         raw = (text, text2, text3, text4, text5, text6, text7, text8, text9, text10)
         stripped = [strip_comments(_clean(t)) for t in raw]
         vals = panel_outputs(count, stripped, PANEL_COUNT)

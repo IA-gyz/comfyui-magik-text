@@ -56,6 +56,7 @@ class TestParseLinks(unittest.TestCase):
         self.assertEqual(parse_links("", 10), [])
         self.assertEqual(parse_links(None, 10), [])
         self.assertEqual(parse_links("nope", 10), [])
+        self.assertEqual(parse_links("undefined", 10), [])
         self.assertEqual(parse_links('{"a": 1}', 10), [])
 
     def test_filters_bad_entries(self):
