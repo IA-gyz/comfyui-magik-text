@@ -50,6 +50,10 @@ textarea. It provides:
   `Ctrl+Shift+/` toggles a `/* ... */` block comment around the selection
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
+- spellcheck toggle (`abc` button in the toolbar, on by default, persisted per panel):
+  native browser spellcheck — misspelled words get squiggles and right-clicking one offers
+  corrections. Prompt syntax (`<lora:...>`, `(text:1.2)`, `[a|b]`) is also checked, so
+  turn it off per panel if that is noisy for you
 - word-wrap toggle, a per-panel font-size setting (`A−` / `A+` in the toolbar, default 24 px, min 8 px, no upper limit),
   a per-panel text alignment (`L` button cycles left / center / right) and a per-panel font color
   (the color picker in the toolbar),

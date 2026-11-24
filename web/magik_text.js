@@ -66,6 +66,10 @@ const CSS = `
 .magik-toolbar button.active {
   border-color: var(--fg-color, #ddd);
 }
+.magik-toolbar button.magik-spell.active {
+  border-color: #6a9955;
+  color: #6a9955;
+}
 .magik-toolbar button.magik-wild.active {
   border-color: #c586c0;
   color: #c586c0;
@@ -494,6 +498,7 @@ class MagikTextEditor {
     this.heightKeyFn = null;
     this.alignKeyFn = null;
     this.colorKeyFn = null;
+    this.spellKeyFn = null;
     this.collapseSet = null;
     this.onHeightChanging = null;
     this.onHeightChanged = null;
@@ -546,12 +551,16 @@ class MagikTextEditor {
     this.colorInput.value = "#dddddd";
     this.colorInput.title = "Text font color";
     this.colorInput.addEventListener("change", () => this.setFontColor(this.colorInput.value));
+    this.spellBtn = el("button", "magik-spell", "abc");
+    this.spellBtn.title = "Toggle spellcheck — misspelled words get squiggles; right-click one for corrections";
+    this.spellBtn.addEventListener("click", () => this.setSpellcheck(!this.spellOn));
     this.stats = el("span", "magik-stats");
-    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.uiDownBtn, this.uiUpBtn, this.alignBtn, this.colorInput, this.stats);
+    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.uiDownBtn, this.uiUpBtn, this.alignBtn, this.colorInput, this.spellBtn, this.stats);
 
     this.fontSize = DEFAULT_FONT_SIZE;
     this.fontKeyFn = null;
     this.align = "left";
+    this.spellOn = true;
 
     this.cardsRow = el("div", "magik-cards");
     this.renderCards();
@@ -563,12 +572,12 @@ class MagikTextEditor {
     this.pre.appendChild(this.code);
     this.ta = document.createElement("textarea");
     this.ta.className = "magik-input";
-    this.ta.spellcheck = false;
     this.ta.placeholder = placeholder;
     this.ta.setAttribute("data-testid", "magik-text-editor-input");
     this.body.append(this.pre, this.ta);
     this.setFontSize(DEFAULT_FONT_SIZE, false);
     this.setAlign("left", false);
+    this.setSpellcheck(true, false);
 
     this.panel = el("div", "magik-panel");
     this.panel.style.display = "none";
@@ -916,6 +925,29 @@ class MagikTextEditor {
     }
   }
 
+  setSpellcheck(on, save = true) {
+    this.spellOn = !!on;
+    this.ta.spellcheck = this.spellOn;
+    if (this.spellBtn) this.spellBtn.classList.toggle("active", this.spellOn);
+    if (save && this.spellKeyFn) {
+      try {
+        localStorage.setItem(this.spellKeyFn(), this.spellOn ? "1" : "0");
+      } catch {
+        // storage unavailable — spellcheck stays session-local
+      }
+    }
+  }
+
+  loadSpellcheck() {
+    if (!this.spellKeyFn) return;
+    try {
+      const v = localStorage.getItem(this.spellKeyFn());
+      this.setSpellcheck(v === null ? true : v === "1", false);
+    } catch {
+      // ignore
+    }
+  }
+
   setFontColor(hex, save = true) {
     this.pre.style.color = hex;
     if (this.colorInput && this.colorInput.value !== hex) this.colorInput.value = hex;
@@ -1158,6 +1190,7 @@ function upgradeWidget(widget, name) {
     editor.heightKeyFn = () => `magik-text.height.${node?.id ?? "?"}.${name}`;
     editor.alignKeyFn = () => `magik-text.align.${node?.id ?? "?"}.${name}`;
     editor.colorKeyFn = () => `magik-text.color.${node?.id ?? "?"}.${name}`;
+    editor.spellKeyFn = () => `magik-text.spell.${node?.id ?? "?"}.${name}`;
     const growNode = () => {
       if (!node) return;
       const cs = node.computeSize();
@@ -1180,6 +1213,7 @@ function upgradeWidget(widget, name) {
       editor.loadHeight();
       editor.loadAlign();
       editor.loadFontColor();
+      editor.loadSpellcheck();
       if (editor.onHeightChanged) editor.onHeightChanged();
     };
     if (node) {
