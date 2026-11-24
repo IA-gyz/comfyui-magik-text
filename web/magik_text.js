@@ -1272,7 +1272,8 @@ function setupPanelsNode(node) {
     if (linksWidget) linksWidget.value = JSON.stringify(links);
   };
   const concatName = (k) => (k === 0 ? "concat" : `concat${k + 1}`);
-  const concatLabel = (link) => `${link[0] + 1}+${link[1] + 1}`;
+  const panelLabel = (i) => `${i + 1}-${titles[i] ?? PANEL_NAMES[i]}`;
+  const concatLabel = (link) => link.map((x) => titles[x] ?? PANEL_NAMES[x]).join(" + ");
   const addLink = (a, b) => {
     const n = getCount();
     if (a === b || a >= n || b >= n) return;
@@ -1339,7 +1340,7 @@ function setupPanelsNode(node) {
   const renamePanel = (i, title) => {
     titles[i] = title;
     const out = node.outputs[i];
-    if (out) out.label = title;
+    if (out) out.label = panelLabel(i);
     node.setDirtyCanvas(true, true);
   };
 
@@ -1362,7 +1363,16 @@ function setupPanelsNode(node) {
       const idx = node.outputs.length;
       const title = titles[idx] ?? PANEL_NAMES[idx];
       const out = node.addOutput(PANEL_NAMES[idx] ?? title, "STRING");
-      if (out) out.label = title;
+      if (out) out.label = panelLabel(idx);
+    }
+    for (let i = 0; i < panelSlots && i < node.outputs.length; i++) {
+      const out = node.outputs[i];
+      const label = out?.label || out?.name;
+      if (label) {
+        titles[i] = label.replace(/^\d+-/, "");
+        if (editors[i]) editors[i].setPanelTitleValue(titles[i]);
+        out.label = panelLabel(i);
+      }
     }
     links.forEach((link, k) => {
       const idx = panelSlots + k;
@@ -1373,14 +1383,6 @@ function setupPanelsNode(node) {
         out.label = concatLabel(link);
       }
     });
-    for (let i = 0; i < panelSlots && i < node.outputs.length; i++) {
-      const out = node.outputs[i];
-      const label = out?.label || out?.name;
-      if (label) {
-        titles[i] = label;
-        if (editors[i]) editors[i].setPanelTitleValue(label);
-      }
-    }
     editors.forEach((editor) => {
       if (editor && editor.renderLinkBadges) editor.renderLinkBadges();
     });
@@ -1450,7 +1452,7 @@ function setupPanelsNode(node) {
         if (collapseWidgets[j + 1]) collapseWidgets[j].value = collapseWidgets[j + 1].value;
         titles[j] = titles[j + 1] ?? PANEL_NAMES[j];
         const out = node.outputs[j];
-        if (out) out.label = titles[j];
+        if (out) out.label = panelLabel(j);
       }
       if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
       if (wildWidgets[n - 1]) wildWidgets[n - 1].value = false;

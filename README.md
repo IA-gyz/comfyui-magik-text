@@ -16,14 +16,17 @@ and support for comments inside prompts.
   and title) as a new panel after the last one, up to 10 panels. Each panel also has
   a colored badge button labeled with the panel's index (1, 2, …): press and drag
   from one panel's badge onto another panel to concatenate them — the node gains a
-  new output (labeled e.g. `1+3`) whose value is the two panels' texts joined with a
+  new output labeled with the joined panel names (e.g. `bob + alice`) whose value is
+  the two panels' texts joined with a
   single space, computed live at queue time (comments stripped, panels beyond the
   count read as empty). Both concatenated panels then show the two badges side by
   side; click a linked badge without dragging to remove the link. Links are stored
   in the workflow (up to 10). Panels that are
   in use — their output is connected to another node's input, or their text field
   is converted to an input and linked — are highlighted with a prominent glowing
-  border and title, so connected panels stand out at a glance. Each panel has an editable title
+  border and title, so connected panels stand out at a glance. Every output label is
+  prefixed with its 1-based index, e.g. `3-bob` for a panel titled `bob` in third
+  position (matching the index badges). Each panel has an editable title
   field (left of its toolbar); renaming it renames the panel's output, and the
   name is saved in the workflow. Closing a panel shifts the titles and values
   of the panels above it up, so outputs keep matching their titles. The first
@@ -72,7 +75,8 @@ textarea. It provides:
   built-in dynamic prompts). When off, the text is sent verbatim.
 - **panel title**: the input at the far left of each panel's toolbar is the
   panel's title; renaming it changes the **label** of the corresponding output
-  slot (the output's internal name stays `text`, `text2`, …).
+  slot to `<index>-<title>` (1-based index, e.g. `3-bob`; the output's internal
+  name stays `text`, `text2`, …).
 - **collapsible panels**: the `▾` button in each panel's toolbar collapses the
   panel (only the toolbar stays visible, the node shrinks accordingly; the
   collapsed row is highlighted and clicking it expands the panel again). The
