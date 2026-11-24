@@ -1,7 +1,7 @@
 from comfy_api.latest import ComfyExtension, io
 
 from .comment_strip import strip_comments
-from .panels import panel_outputs
+from .panels import concat_outputs, panel_outputs
 
 CATEGORY = "Magik/Text"
 TEXT_COUNT = 7
@@ -67,7 +67,16 @@ class MagikText(io.ComfyNode):
             )
             for name in _collapse_names()
         ]
+        inputs.append(
+            io.String.Input(
+                "links",
+                default="[]",
+                multiline=False,
+                tooltip="Serialized list of panel index pairs to concatenate (managed by the frontend)",
+            )
+        )
         outputs = [io.String.Output(name) for name in names]
+        outputs += [io.String.Output("concat" if i == 1 else f"concat{i}") for i in range(1, PANEL_COUNT + 1)]
         return io.Schema(
             node_id="Magik.Text",
             display_name="Magik Text",
@@ -81,10 +90,12 @@ class MagikText(io.ComfyNode):
                 wildcards, wildcards2, wildcards3, wildcards4, wildcards5,
                 wildcards6, wildcards7, wildcards8, wildcards9, wildcards10,
                 collapse, collapse2, collapse3, collapse4, collapse5,
-                collapse6, collapse7, collapse8, collapse9, collapse10):
+                collapse6, collapse7, collapse8, collapse9, collapse10,
+                links):
         raw = (text, text2, text3, text4, text5, text6, text7, text8, text9, text10)
         stripped = [strip_comments(_clean(t)) for t in raw]
-        return io.NodeOutput(*panel_outputs(count, stripped, PANEL_COUNT))
+        vals = panel_outputs(count, stripped, PANEL_COUNT)
+        return io.NodeOutput(*vals, *concat_outputs(links, vals, PANEL_COUNT))
 
 
 class MagikText7Concat(io.ComfyNode):

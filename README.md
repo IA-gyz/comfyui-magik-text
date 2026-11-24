@@ -13,7 +13,14 @@ and support for comments inside prompts.
   removes it and its output (values of the panels above shift up). A panel
   whose output is connected cannot be closed. Each panel also has a ⧉ duplicate
   button; duplicating adds a copy of the panel (text, wildcards, collapsed state
-  and title) as a new panel after the last one, up to 10 panels. Panels that are
+  and title) as a new panel after the last one, up to 10 panels. Each panel also has
+  a colored badge button labeled with the panel's index (1, 2, …): press and drag
+  from one panel's badge onto another panel to concatenate them — the node gains a
+  new output (labeled e.g. `1+3`) whose value is the two panels' texts joined with a
+  single space, computed live at queue time (comments stripped, panels beyond the
+  count read as empty). Both concatenated panels then show the two badges side by
+  side; click a linked badge without dragging to remove the link. Links are stored
+  in the workflow (up to 10). Panels that are
   in use — their output is connected to another node's input, or their text field
   is converted to an input and linked — are highlighted with a prominent glowing
   border and title, so connected panels stand out at a glance. Each panel has an editable title

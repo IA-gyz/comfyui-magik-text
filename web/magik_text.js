@@ -290,6 +290,34 @@ const CSS = `
 .magik-color:hover {
   border-color: var(--border-color, #444);
 }
+.magik-link-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--u, 1));
+  margin: 0 calc(2px * var(--u, 1));
+}
+.magik-link-badge {
+  background: hsl(var(--badge-hue, 210) 70% 42%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: calc(8px * var(--u, 1));
+  font: bold calc(11px * var(--u, 1))/1.6 monospace;
+  padding: 0 calc(6px * var(--u, 1));
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.magik-link-badge:hover {
+  filter: brightness(1.25);
+}
+.magik-link-badge.magik-drag-src {
+  cursor: grabbing;
+  outline: 2px solid #fff;
+}
+.magik-text-editor.magik-link-target {
+  outline: 2px dashed #4da3ff;
+  outline-offset: calc(2px * var(--u, 1));
+}
 .magik-c { color: #6a9955; font-style: italic; }
 .magik-w { color: #569cd6; }
 .magik-a { color: #ce9178; }
@@ -743,6 +771,70 @@ class MagikTextEditor {
     else this.toolbar.appendChild(btn);
   }
 
+  setLinkControl(index, api) {
+    this.linkIndex = index;
+    this.linkApi = api;
+    this.linkBox = el("span", "magik-link-badges");
+    this.toolbar.insertBefore(this.linkBox, this.duplicateBtn ?? this.closeBtn ?? this.stats);
+  }
+
+  renderLinkBadges() {
+    if (!this.linkBox || !this.linkApi) return;
+    const i = this.linkIndex;
+    const api = this.linkApi;
+    const badges = new Set([i]);
+    for (const link of api.getLinks()) {
+      const [a, b] = link;
+      if (a === i) badges.add(b);
+      else if (b === i) badges.add(a);
+    }
+    this.linkBox.replaceChildren();
+    for (const j of [...badges].sort((x, y) => x - y)) {
+      const badge = el("button", "magik-link-badge", String(j + 1));
+      badge.style.setProperty("--badge-hue", String((j * 137) % 360));
+      badge.title =
+        j === i
+          ? `Panel ${j + 1} — press and drag onto another panel to concatenate them into a new output`
+          : `Concatenated with panel ${j + 1} — click to remove this link, or drag onto another panel`;
+      badge.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let dragged = false;
+        let hoverRoot = null;
+        badge.classList.add("magik-drag-src");
+        const move = (ev) => {
+          if (!dragged && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
+          dragged = true;
+          const t = document.elementFromPoint(ev.clientX, ev.clientY);
+          const root = t && t.closest ? t.closest(".magik-text-editor") : null;
+          if (hoverRoot && hoverRoot !== root) hoverRoot.classList.remove("magik-link-target");
+          hoverRoot = root;
+          if (hoverRoot) hoverRoot.classList.add("magik-link-target");
+        };
+        const up = (ev) => {
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", up);
+          badge.classList.remove("magik-drag-src");
+          if (hoverRoot) hoverRoot.classList.remove("magik-link-target");
+          if (dragged) {
+            const t = document.elementFromPoint(ev.clientX, ev.clientY);
+            const root = t && t.closest ? t.closest(".magik-text-editor") : null;
+            const dst = root ? api.resolveRoot(root) : -1;
+            if (dst !== -1 && dst !== i) api.addLink(i, dst);
+          } else if (j !== i) {
+            api.removeLink(i, j);
+          }
+        };
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+      });
+      this.linkBox.appendChild(badge);
+    }
+  }
+
   setCollapseControl(get, set) {
     const btn = el("button", "magik-collapse", "▾");
     btn.title = "Collapse / expand this panel";
@@ -1145,6 +1237,63 @@ function setupPanelsNode(node) {
   const collapseWidgets = [];
   const titles = PANEL_NAMES.slice();
   let firstEditor = null;
+  const linksWidget = node.widgets?.find((w) => w.name === "links");
+  if (linksWidget) setPanelVisible(linksWidget, false, "text");
+  let links = [];
+  const rootToIndex = new Map();
+  const linkKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+  const normalizeLinks = (raw) => {
+    let data;
+    try {
+      data = JSON.parse(raw || "[]");
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(data)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const pair of data) {
+      if (!Array.isArray(pair) || pair.length !== 2) continue;
+      const a = Number(pair[0]);
+      const b = Number(pair[1]);
+      if (!Number.isInteger(a) || !Number.isInteger(b) || a === b || a < 0 || b < 0 || a >= MAX_PANELS || b >= MAX_PANELS) continue;
+      const key = linkKey(a, b);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push([a, b]);
+      if (out.length >= MAX_PANELS) break;
+    }
+    return out;
+  };
+  const reloadLinks = () => {
+    links = normalizeLinks(linksWidget?.value);
+  };
+  const saveLinks = () => {
+    if (linksWidget) linksWidget.value = JSON.stringify(links);
+  };
+  const concatName = (k) => (k === 0 ? "concat" : `concat${k + 1}`);
+  const concatLabel = (link) => `${link[0] + 1}+${link[1] + 1}`;
+  const addLink = (a, b) => {
+    const n = getCount();
+    if (a === b || a >= n || b >= n) return;
+    if (links.length >= MAX_PANELS) {
+      console.warn(`[magik-text] cannot link panels: already at the maximum of ${MAX_PANELS} links`);
+      return;
+    }
+    if (links.some(([x, y]) => linkKey(x, y) === linkKey(a, b))) return;
+    links.push([a, b]);
+    saveLinks();
+    syncPanels();
+    node.graph?.change?.();
+  };
+  const removeLink = (a, b) => {
+    const k = links.findIndex(([x, y]) => (x === a && y === b) || (x === b && y === a));
+    if (k === -1) return;
+    links.splice(k, 1);
+    saveLinks();
+    syncPanels();
+    node.graph?.change?.();
+  };
   PANEL_NAMES.forEach((name, i) => {
     const widget = node.widgets?.find((w) => w.name === name && w.element);
     if (!widget) return;
@@ -1155,6 +1304,13 @@ function setupPanelsNode(node) {
     if (!firstEditor) firstEditor = editor;
     editor.setCloseButton(() => closePanel(i));
     editor.setDuplicateButton(() => duplicatePanel(i));
+    rootToIndex.set(editor.root, i);
+    editor.setLinkControl(i, {
+      getLinks: () => links,
+      addLink: (a, b) => addLink(a, b),
+      removeLink: (a, b) => removeLink(a, b),
+      resolveRoot: (root) => (rootToIndex.has(root) ? rootToIndex.get(root) : -1),
+    });
     editor.setPanelTitle(titles[i], (t) => renamePanel(i, t));
     const ww = node.widgets?.find((w) => w.name === WILDCARD_NAMES[i]);
     if (ww) {
@@ -1195,17 +1351,29 @@ function setupPanelsNode(node) {
   let initialized = false;
   let lastCount = 0;
   const syncPanels = () => {
+    reloadLinks();
     const n = getCount();
     firstEditor.setPanelsLabel(`${n} panel${n === 1 ? "" : "s"}`);
     textWidgets.forEach((widget, i) => setPanelVisible(widget, i < n));
-    while (node.outputs.length > n) node.removeOutput(node.outputs.length - 1);
-    while (node.outputs.length < n) {
+    const panelSlots = links.length > 0 ? MAX_PANELS : n;
+    const total = panelSlots + links.length;
+    while (node.outputs.length > total) node.removeOutput(node.outputs.length - 1);
+    while (node.outputs.length < panelSlots) {
       const idx = node.outputs.length;
       const title = titles[idx] ?? PANEL_NAMES[idx];
       const out = node.addOutput(PANEL_NAMES[idx] ?? title, "STRING");
       if (out) out.label = title;
     }
-    for (let i = 0; i < node.outputs.length; i++) {
+    links.forEach((link, k) => {
+      const idx = panelSlots + k;
+      if (node.outputs.length <= idx) node.addOutput(concatName(k), "STRING");
+      const out = node.outputs[idx];
+      if (out) {
+        out.name = concatName(k);
+        out.label = concatLabel(link);
+      }
+    });
+    for (let i = 0; i < panelSlots && i < node.outputs.length; i++) {
       const out = node.outputs[i];
       const label = out?.label || out?.name;
       if (label) {
@@ -1213,6 +1381,9 @@ function setupPanelsNode(node) {
         if (editors[i]) editors[i].setPanelTitleValue(label);
       }
     }
+    editors.forEach((editor) => {
+      if (editor && editor.renderLinkBadges) editor.renderLinkBadges();
+    });
     wildWidgets.forEach((w, i) => {
       if (w && editors[i]) editors[i].setWildcardValue(w.value === true);
     });
@@ -1284,6 +1455,14 @@ function setupPanelsNode(node) {
       if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
       if (wildWidgets[n - 1]) wildWidgets[n - 1].value = false;
       if (collapseWidgets[n - 1]) collapseWidgets[n - 1].value = false;
+      links = normalizeLinks(
+        JSON.stringify(
+          links
+            .filter(([a, b]) => a !== i && b !== i)
+            .map(([a, b]) => [a > i ? a - 1 : a, b > i ? b - 1 : b])
+        )
+      );
+      saveLinks();
       setCount(n - 1);
     } catch (err) {
       console.error("[magik-text] could not close panel", err);
@@ -1336,7 +1515,7 @@ function setupPanelsNode(node) {
     }
   };
 
-  panelsControls.set(node, { getCount, setCount, sync: syncPanels, closePanel, duplicatePanel });
+  panelsControls.set(node, { getCount, setCount, sync: syncPanels, closePanel, duplicatePanel, addLink, removeLink, getLinks: () => links });
   syncPanels();
 }
 
