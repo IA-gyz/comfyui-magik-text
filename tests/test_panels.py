@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from panels import clamp_count, panel_outputs
+from panels import clamp_count, concat_outputs, panel_outputs, parse_links
 
 
 class TestClampCount(unittest.TestCase):
@@ -46,6 +46,44 @@ class TestPanelOutputs(unittest.TestCase):
     def test_count_clamped(self):
         self.assertEqual(panel_outputs(99, ["a"], 3), ["a", "", ""])
         self.assertEqual(panel_outputs(0, ["a", "b"], 3), ["a", "", ""])
+
+
+class TestParseLinks(unittest.TestCase):
+    def test_valid_pair(self):
+        self.assertEqual(parse_links("[[2, 0]]", 10), [(2, 0)])
+
+    def test_empty_and_invalid(self):
+        self.assertEqual(parse_links("", 10), [])
+        self.assertEqual(parse_links(None, 10), [])
+        self.assertEqual(parse_links("nope", 10), [])
+        self.assertEqual(parse_links('{"a": 1}', 10), [])
+
+    def test_filters_bad_entries(self):
+        raw = '[[0, 0], [-1, 2], ["a", 1], [1], [0, 2], [2, 0]]'
+        self.assertEqual(parse_links(raw, 10), [(0, 2)])
+
+    def test_order_preserved_but_deduped_regardless_of_order(self):
+        self.assertEqual(parse_links("[[2, 0], [0, 2]]", 10), [(2, 0)])
+
+    def test_capped(self):
+        raw = str([[i, i + 1] for i in range(10)])
+        self.assertEqual(parse_links(raw, 3), [(0, 1), (1, 2), (2, 3)])
+
+
+class TestConcatOutputs(unittest.TestCase):
+    def test_space_join(self):
+        self.assertEqual(concat_outputs("[[0, 2]]", ["a", "b", "c"], 10), ["a c"] + [""] * 9)
+
+    def test_multiple_links(self):
+        self.assertEqual(concat_outputs("[[0, 1], [2, 0]]", ["a", "b", "c"], 10), ["a b", "c a"] + [""] * 8)
+
+    def test_out_of_range_index_is_empty(self):
+        self.assertEqual(concat_outputs("[[0, 5]]", ["a"], 10), ["a "] + [""] * 9)
+
+    def test_always_max_length(self):
+        self.assertEqual(len(concat_outputs("[]", ["a"], 10)), 10)
+        self.assertEqual(concat_outputs("[]", ["a"], 10), [""] * 10)
+        self.assertEqual(len(concat_outputs("[[0, 1]]", ["a", "b"], 3)), 3)
 
 
 if __name__ == "__main__":
