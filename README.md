@@ -46,9 +46,11 @@ textarea. It provides:
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
   Font size, alignment, color and height are persisted per panel in local storage (keyed by node id +
   widget name) and restored on reload / tab switch. There is also a global UI size setting
-  (`UI−` / `UI+` in the toolbar): one value for all panels that scales the whole panel UI
-  (toolbar, cards, text and handle) at once, persisted in local storage under a single global
-  key and applied to every Magik text editor, independent of the per-panel font size. The status bar shows
+  (`UI−` / `UI+` in the toolbar): one global value for all panels that scales the whole panel UI
+  (toolbar, cards, text and handle) at once through a single CSS variable, so every editor scales
+  identically and panel heights / node layout stay unchanged (no gaps between panels). Persisted
+  in local storage under a single global key, applied to every Magik text editor, independent of
+  the per-panel font size. The status bar shows
   line/word/character counts, including the character count after comments
   are removed
 - **cards**: the card strip below the toolbar holds buttons with predefined

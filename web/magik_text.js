@@ -25,7 +25,11 @@ const panelsControls = new WeakMap();
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
 
 const CSS = `
+:root {
+  --magik-ui-scale: 1;
+}
 .magik-text-editor {
+  --u: var(--magik-ui-scale, 1);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -34,15 +38,15 @@ const CSS = `
   box-sizing: border-box;
   background: var(--comfy-input-bg, #202020);
   border: 1px solid var(--border-color, #333);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--u));
   overflow: hidden;
 }
 .magik-toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: calc(2px * var(--u));
   flex: 0 0 auto;
-  padding: 2px 4px;
+  padding: calc(2px * var(--u)) calc(4px * var(--u));
   border-bottom: 1px solid var(--border-color, #333);
   background: var(--comfy-menu-bg, #262626);
 }
@@ -50,9 +54,9 @@ const CSS = `
   background: transparent;
   color: var(--fg-color, #ddd);
   border: 1px solid transparent;
-  border-radius: 4px;
-  font: 11px/1.6 monospace;
-  padding: 0 6px;
+  border-radius: calc(4px * var(--u));
+  font: calc(11px * var(--u))/1.6 monospace;
+  padding: 0 calc(6px * var(--u));
   cursor: pointer;
 }
 .magik-toolbar button:hover {
@@ -68,8 +72,8 @@ const CSS = `
 }
 .magik-stats {
   margin-left: auto;
-  padding-right: 4px;
-  font: 10px/1.6 monospace;
+  padding-right: calc(4px * var(--u));
+  font: calc(10px * var(--u))/1.6 monospace;
   color: var(--descrip-text, #888);
   white-space: nowrap;
   user-select: none;
@@ -77,10 +81,10 @@ const CSS = `
 .magik-cards {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--u));
   flex: 0 0 auto;
-  min-height: 26px;
-  padding: 2px 4px;
+  min-height: calc(26px * var(--u));
+  padding: calc(2px * var(--u)) calc(4px * var(--u));
   overflow-x: auto;
   overflow-y: hidden;
   border-bottom: 1px solid var(--border-color, #333);
@@ -91,9 +95,9 @@ const CSS = `
   background: var(--comfy-input-bg, #383838);
   color: var(--fg-color, #ddd);
   border: 1px solid var(--border-color, #444);
-  border-radius: 10px;
-  font: 11px/1.6 monospace;
-  padding: 0 8px;
+  border-radius: calc(10px * var(--u));
+  font: calc(11px * var(--u))/1.6 monospace;
+  padding: 0 calc(8px * var(--u));
   cursor: pointer;
   white-space: nowrap;
 }
@@ -105,30 +109,30 @@ const CSS = `
 }
 .magik-panel {
   position: absolute;
-  top: 56px;
-  right: 4px;
+  top: calc(56px * var(--u));
+  right: calc(4px * var(--u));
   z-index: 10;
-  width: min(340px, 92%);
-  max-height: calc(100% - 64px);
+  width: min(calc(340px * var(--u)), 92%);
+  max-height: calc(100% - 64px * var(--u));
   overflow-y: auto;
   background: var(--comfy-menu-bg, #2a2a2a);
   border: 1px solid var(--border-color, #444);
-  border-radius: 6px;
-  padding: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border-radius: calc(6px * var(--u));
+  padding: calc(6px * var(--u));
+  box-shadow: 0 calc(4px * var(--u)) calc(12px * var(--u)) rgba(0, 0, 0, 0.5);
 }
 .magik-panel-row {
   display: flex;
-  gap: 4px;
+  gap: calc(4px * var(--u));
   align-items: flex-start;
-  margin-bottom: 6px;
+  margin-bottom: calc(6px * var(--u));
 }
 .magik-panel-new {
   border-top: 1px solid var(--border-color, #333);
-  padding-top: 6px;
+  padding-top: calc(6px * var(--u));
 }
 .magik-panel-name {
-  width: 84px;
+  width: calc(84px * var(--u));
   flex: 0 0 auto;
 }
 .magik-panel-text {
@@ -140,18 +144,18 @@ const CSS = `
   background: var(--comfy-input-bg, #202020);
   color: var(--input-text, #ddd);
   border: 1px solid var(--border-color, #444);
-  border-radius: 4px;
-  padding: 2px 4px;
-  font: 11px/1.4 monospace;
+  border-radius: calc(4px * var(--u));
+  padding: calc(2px * var(--u)) calc(4px * var(--u));
+  font: calc(11px * var(--u))/1.4 monospace;
 }
 .magik-panel button {
   flex: 0 0 auto;
   background: transparent;
   color: var(--fg-color, #ddd);
   border: 1px solid var(--border-color, #444);
-  border-radius: 4px;
-  font: 11px/1.6 monospace;
-  padding: 0 6px;
+  border-radius: calc(4px * var(--u));
+  font: calc(11px * var(--u))/1.6 monospace;
+  padding: 0 calc(6px * var(--u));
   cursor: pointer;
 }
 .magik-panel button:hover {
@@ -168,9 +172,9 @@ const CSS = `
   inset: 0;
   margin: 0;
   border: 0;
-  padding: 6px 8px;
+  padding: calc(6px * var(--u)) calc(8px * var(--u));
   font-family: monospace;
-  font-size: 24px;
+  font-size: calc(24px * var(--u));
   line-height: 1.5;
   tab-size: 4;
   white-space: pre-wrap;
@@ -199,14 +203,14 @@ const CSS = `
   outline: none;
 }
 .magik-panel-title {
-  width: 110px;
+  width: calc(110px * var(--u));
   flex: 0 1 auto;
   background: transparent;
   color: #c586c0;
   border: 1px solid transparent;
-  border-radius: 4px;
-  font: bold 14px/1.6 monospace;
-  padding: 0 4px;
+  border-radius: calc(4px * var(--u));
+  font: bold calc(14px * var(--u))/1.6 monospace;
+  padding: 0 calc(4px * var(--u));
 }
 .magik-panel-title:hover,
 .magik-panel-title:focus {
@@ -222,25 +226,25 @@ const CSS = `
 .magik-toolbar-sep {
   width: 1px;
   align-self: stretch;
-  margin: 2px 2px;
+  margin: calc(2px * var(--u)) calc(2px * var(--u));
   background: var(--border-color, #444);
 }
 .magik-panels-label {
-  font: 11px/1.6 monospace;
+  font: calc(11px * var(--u))/1.6 monospace;
   color: var(--descrip-text, #888);
-  padding: 0 2px;
+  padding: 0 calc(2px * var(--u));
   user-select: none;
   white-space: nowrap;
 }
 .magik-close {
-  margin-left: 4px;
+  margin-left: calc(4px * var(--u));
 }
 .magik-close:hover {
   color: var(--error-text, #f66);
 }
 .magik-resize-handle {
   flex: 0 0 auto;
-  height: 8px;
+  height: calc(8px * var(--u));
   cursor: ns-resize;
   touch-action: none;
   border-top: 1px solid var(--border-color, #333);
@@ -262,24 +266,24 @@ const CSS = `
   border-color: #c586c0;
   color: #c586c0;
   font-weight: bold;
-  padding: 0 10px;
+  padding: 0 calc(10px * var(--u));
 }
 .magik-text-editor.magik-connected {
   border: 2px solid #4da3ff;
-  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.6), 0 0 16px 4px rgba(77, 163, 255, 0.55), inset 0 0 10px rgba(77, 163, 255, 0.25);
+  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.6), 0 0 calc(16px * var(--u)) calc(4px * var(--u)) rgba(77, 163, 255, 0.55), inset 0 0 calc(10px * var(--u)) rgba(77, 163, 255, 0.25);
 }
 .magik-text-editor.magik-connected .magik-panel-title {
   color: #4da3ff;
   border-color: #4da3ff;
   font-weight: bold;
-  text-shadow: 0 0 6px rgba(77, 163, 255, 0.8);
+  text-shadow: 0 0 calc(6px * var(--u)) rgba(77, 163, 255, 0.8);
 }
 .magik-color {
-  width: 22px;
-  height: 20px;
+  width: calc(22px * var(--u));
+  height: calc(20px * var(--u));
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--u));
   background: transparent;
   cursor: pointer;
 }
@@ -773,8 +777,9 @@ class MagikTextEditor {
 
   setFontSize(px, save = true) {
     this.fontSize = Math.max(8, Math.round(px));
-    this.pre.style.fontSize = `${this.fontSize}px`;
-    this.ta.style.fontSize = `${this.fontSize}px`;
+    const scaled = `${this.fontSize * uiScale}px`;
+    this.pre.style.fontSize = scaled;
+    this.ta.style.fontSize = scaled;
     if (save && this.fontKeyFn) {
       try {
         localStorage.setItem(this.fontKeyFn(), String(this.fontSize));
@@ -849,10 +854,9 @@ class MagikTextEditor {
   }
 
   applyUiScale() {
-    const s = uiScale;
-    this.root.style.zoom = String(s);
-    this.root.style.height = s === 1 ? "" : `calc(100% / ${s})`;
-    const pct = `${Math.round(s * 100)}%`;
+    document.documentElement.style.setProperty("--magik-ui-scale", String(uiScale));
+    if (this.pre) this.setFontSize(this.fontSize, false);
+    const pct = `${Math.round(uiScale * 100)}%`;
     if (this.uiDownBtn) this.uiDownBtn.title = `Decrease UI size of all panels — global setting (currently ${pct})`;
     if (this.uiUpBtn) this.uiUpBtn.title = `Increase UI size of all panels — global setting (currently ${pct})`;
   }
