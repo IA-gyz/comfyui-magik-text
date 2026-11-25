@@ -21,107 +21,6 @@ const PANEL_NAMES = ["text", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) =>
 const WILDCARD_NAMES = ["wildcards", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `wildcards${i + 2}`)];
 const COLLAPSE_NAMES = ["collapse", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `collapse${i + 2}`)];
 const panelsControls = new WeakMap();
-const COLS_MAX = 5;
-const COLS_WIDTH = 320;
-const COLS_GAP = 8;
-const COLS_MARGIN = 10;
-const columnsNodes = new Set();
-const hookedCanvases = new WeakSet();
-
-function getDomWidgetStates() {
-  const pinia = app.vueApp?.config?.globalProperties?.$pinia;
-  const store = pinia?._s?.get?.("domWidget");
-  return store?.widgetStates;
-}
-
-function layoutColumns(node, states) {
-  const c = panelsControls.get(node);
-  if (!c) return;
-  const cols = c.getCols();
-  const n = c.getCount();
-  const widgets = c.widgets;
-  if (cols <= 1) {
-    for (let i = 0; i < n; i++) {
-      const w = widgets[i];
-      if (!w) continue;
-      w.width = undefined;
-      const st = states.get(w.id);
-      if (st) {
-        const margin = w.margin ?? COLS_MARGIN;
-        st.pos = [node.pos[0] + margin, node.pos[1] + margin + (w.y ?? 0)];
-        st.size = [Math.max(0, (node.size?.[0] ?? 0) - 2 * margin), Math.max(0, (w.computedHeight ?? 50) - 2 * margin)];
-      } else if (w.element?.parentElement) {
-        const elp = w.element.parentElement;
-        elp.style.left = "";
-        elp.style.top = "";
-        elp.style.width = "";
-        elp.style.height = "";
-      }
-    }
-    return;
-  }
-  const baseY = widgets[0]?.y ?? 30;
-  const full = [];
-  for (let i = 0; i < n; i++) {
-    full.push(widgets[i]?.computedHeight ?? ((c.editors[i]?.currentHeight() ?? 200) + 2 * COLS_MARGIN));
-  }
-  const rows = Math.ceil(n / cols);
-  const rowY = new Array(rows).fill(0);
-  let acc = 0;
-  for (let r = 0; r < rows; r++) {
-    let h = 0;
-    for (let i = r * cols; i < Math.min(n, (r + 1) * cols); i++) h = Math.max(h, full[i]);
-    rowY[r] = acc;
-    acc += h + COLS_GAP;
-  }
-  for (let i = 0; i < n; i++) {
-    const w = widgets[i];
-    if (!w) continue;
-    w.width = COLS_WIDTH + 2 * COLS_MARGIN;
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = node.pos[0] + COLS_MARGIN + col * (COLS_WIDTH + COLS_GAP);
-    const y = node.pos[1] + COLS_MARGIN + baseY + rowY[row];
-    const st = states.get(w.id);
-    if (st) {
-      st.pos = [x, y];
-      st.size = [COLS_WIDTH, Math.max(0, full[i] - 2 * COLS_MARGIN)];
-    } else if (w.element?.parentElement) {
-      const canvas = app.canvas;
-      const ds = canvas?.ds;
-      const rect = canvas?.canvas?.getBoundingClientRect();
-      if (ds && rect) {
-        const el = w.element.parentElement;
-        el.style.left = `${rect.left + x * ds.scale + ds.offset[0]}px`;
-        el.style.top = `${rect.top + y * ds.scale + ds.offset[1]}px`;
-        el.style.width = `${COLS_WIDTH * ds.scale}px`;
-        el.style.height = `${Math.max(0, full[i] - 2 * COLS_MARGIN) * ds.scale}px`;
-      }
-    }
-  }
-}
-
-function ensureColumnHook() {
-  const canvas = app.canvas;
-  if (!canvas || hookedCanvases.has(canvas)) return;
-  hookedCanvases.add(canvas);
-  const prev = canvas.onDrawForeground;
-  canvas.onDrawForeground = function (...args) {
-    const r = prev?.apply(this, args);
-    try {
-      const states = getDomWidgetStates();
-      if (states) {
-        for (const node of columnsNodes) layoutColumns(node, states);
-      } else {
-        for (const node of columnsNodes) layoutColumns(node, new Map());
-      }
-    } catch {
-      // column layout is best-effort — never break canvas drawing
-    }
-    return r;
-  };
-}
-
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
 
 const CSS = `
@@ -178,7 +77,6 @@ const CSS = `
   border-bottom: 1px solid var(--border-color, #333);
   background: var(--comfy-menu-bg, #262626);
 }
-.magik-menu-row .magik-cols-slider,
 .magik-menu-row .magik-ui-slider {
   width: calc(80px * var(--u));
   accent-color: #4da3ff;
@@ -896,28 +794,11 @@ class MagikTextEditor {
     this.uiScaleSlider = null;
   }
 
-  setMenuRow(onAdd, colsApi) {
+  setMenuRow(onAdd) {
     this.menuRow = el("div", "magik-menu-row");
     if (this.uiScaleSlider) {
       const uiLabel = el("span", "magik-panels-label", "ui");
       this.menuRow.append(uiLabel, this.uiScaleSlider);
-    }
-    if (colsApi) {
-      const colsLabel = el("span", "magik-panels-label", "cols");
-      const slider = document.createElement("input");
-      slider.type = "range";
-      slider.min = "1";
-      slider.max = String(COLS_MAX);
-      slider.step = "1";
-      slider.value = String(colsApi.get());
-      slider.className = "magik-cols-slider";
-      slider.title = `Number of panel columns (1–${COLS_MAX})`;
-      slider.addEventListener("input", () => {
-        const v = Math.min(COLS_MAX, Math.max(1, Math.round(Number(slider.value)) || 1));
-        slider.value = String(v);
-        colsApi.set(v);
-      });
-      this.menuRow.append(colsLabel, slider);
     }
     this.panelLabel = el("span", "magik-panels-label", "");
     const plus = el("button", null, "＋");
@@ -1499,27 +1380,6 @@ function setupPanelsNode(node) {
     syncPanels();
     node.graph?.change?.();
   };
-  let cols = -1;
-  const colsKeyFn = () => `magik-text.cols.${node.id ?? "?"}`;
-  const loadCols = () => {
-    try {
-      const v = parseInt(localStorage.getItem(colsKeyFn()) || "", 10);
-      if (Number.isFinite(v)) return Math.min(COLS_MAX, Math.max(1, v));
-    } catch {}
-    return 1;
-  };
-  const getCols = () => {
-    if (cols < 0) cols = loadCols();
-    return cols;
-  };
-  const setCols = (v) => {
-    cols = Math.min(COLS_MAX, Math.max(1, Math.round(Number(v)) || 1));
-    try {
-      localStorage.setItem(colsKeyFn(), String(cols));
-    } catch {}
-    syncPanels();
-    node.setDirtyCanvas(true, true);
-  };
   PANEL_NAMES.forEach((name, i) => {
     const widget = node.widgets?.find((w) => w.name === name && w.element);
     if (!widget) return;
@@ -1576,7 +1436,6 @@ function setupPanelsNode(node) {
 
   let initialized = false;
   let lastCount = 0;
-  let lastCols = 0;
   const syncPanels = () => {
     reloadLinks();
     const n = getCount();
@@ -1631,30 +1490,6 @@ function setupPanelsNode(node) {
       node.setSize([w, cs[1]]);
     }
     lastCount = n;
-    const cc = getCols();
-    if (cc > 1) {
-      const gw = 2 * COLS_MARGIN + cc * COLS_WIDTH + (cc - 1) * COLS_GAP;
-      const baseY = textWidgets[0]?.y ?? 30;
-      let gh = COLS_MARGIN + baseY;
-      const rows = Math.ceil(n / cc);
-      for (let r = 0; r < rows; r++) {
-        let rh = 0;
-        for (let i = r * cc; i < Math.min(n, (r + 1) * cc); i++) {
-          rh = Math.max(rh, textWidgets[i]?.computedHeight ?? ((editors[i]?.currentHeight() ?? 200) + 2 * COLS_MARGIN));
-        }
-        gh += rh + COLS_GAP;
-      }
-      node.setSize([gw, gh + COLS_MARGIN - COLS_GAP]);
-    } else {
-      textWidgets.forEach((w) => {
-        if (w) w.width = undefined;
-      });
-      if (lastCols > 1) {
-        const cs2 = node.computeSize();
-        node.setSize([cs2[0], cs2[1]]);
-      }
-    }
-    lastCols = cc;
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
   };
@@ -1742,15 +1577,7 @@ function setupPanelsNode(node) {
   editors.forEach((editor) => {
     if (editor && editor !== firstEditor) editor.hideUiScaleControl();
   });
-  firstEditor.setMenuRow(() => setCount(getCount() + 1), { get: getCols, set: setCols });
-
-  columnsNodes.add(node);
-  ensureColumnHook();
-  const prevOnRemoved = node.onRemoved;
-  node.onRemoved = function (...args) {
-    columnsNodes.delete(node);
-    if (prevOnRemoved) prevOnRemoved.apply(this, args);
-  };
+  firstEditor.setMenuRow(() => setCount(getCount() + 1));
 
   const origCallback = countWidget.callback;
   countWidget.callback = function (v) {
@@ -1789,11 +1616,6 @@ function setupPanelsNode(node) {
     getLinks: () => links,
     widgets: textWidgets,
     editors,
-    getCols,
-    setCols,
-    reloadCols: () => {
-      cols = loadCols();
-    },
   });
   syncPanels();
 }
@@ -1813,7 +1635,6 @@ app.registerExtension({
       const controls = panelsControls.get(this);
       if (controls) {
         try {
-          controls.reloadCols?.();
           controls.sync();
         } catch (err) {
           console.error("[magik-text] panel sync after load failed", err);
