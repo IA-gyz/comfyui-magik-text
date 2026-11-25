@@ -7,9 +7,11 @@ and support for comments inside prompts.
 
 - **Magik Text** (`Magik.Text`) — a multiline text box with a dynamic number of
   panels. Every panel is a full text editor (with cards, comments and
-  highlighting) and has its own output. Use the ＋ button in the first panel's
-  toolbar (or the node's right-click menu) to add a panel — each new panel adds
-  one output, up to 10. Each panel has its own ✕ close button; closing a panel
+  highlighting) and has its own output. The node has a menu row at the very top
+  (above the first panel) holding the global UI-size buttons, the panel count and
+  the ＋ add-panel button (the node's right-click menu can also add/remove panels);
+  each new panel adds one output, up to 10. Each panel has a prominent title row of
+  its own just under its toolbar. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
   whose output is connected cannot be closed. Each panel also has a ⧉ duplicate
   button; duplicating adds a copy of the panel (text, wildcards, collapsed state
@@ -60,7 +62,7 @@ textarea. It provides:
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
   Font size, alignment, color and height are persisted per panel in local storage (keyed by node id +
   widget name) and restored on reload / tab switch. There is also a global UI size setting
-  (`UI−` / `UI+` in the toolbar): one global value for all panels that scales the whole panel UI
+  (`UI−` / `UI+` in the menu row at the top of the node): one global value for all panels that scales the whole panel UI
   (toolbar, cards, text and handle) at once through a single CSS variable, so every editor scales
   identically and panel heights / node layout stay unchanged (no gaps between panels). Persisted
   in local storage under a single global key, applied to every Magik text editor, independent of
@@ -77,10 +79,10 @@ textarea. It provides:
   at queue time — `{a|b|c}` picks one option at random (nesting and `\{`
   escapes work, `/* */` and `//` comments are stripped, exactly like ComfyUI's
   built-in dynamic prompts). When off, the text is sent verbatim.
-- **panel title**: the input at the far left of each panel's toolbar is the
-  panel's title; renaming it changes the **label** of the corresponding output
-  slot to `<index>-<title>` (1-based index, e.g. `3-bob`; the output's internal
-  name stays `text`, `text2`, …).
+- **panel title**: each panel has its own prominent title row (full-width, bold, larger
+  font) just under its toolbar; renaming the title changes the **label** of the
+  corresponding output slot to `<index>-<title>` (1-based index, e.g. `3-bob`; the
+  output's internal name stays `text`, `text2`, …).
 - **collapsible panels**: the `▾` button in each panel's toolbar collapses the
   panel (only the toolbar stays visible, the node shrinks accordingly; the
   collapsed row is highlighted and clicking it expands the panel again). The

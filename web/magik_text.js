@@ -50,7 +50,8 @@ const CSS = `
   border-bottom: 1px solid var(--border-color, #333);
   background: var(--comfy-menu-bg, #262626);
 }
-.magik-toolbar button {
+.magik-toolbar button,
+.magik-menu-row button {
   background: transparent;
   color: var(--fg-color, #ddd);
   border: 1px solid transparent;
@@ -59,12 +60,23 @@ const CSS = `
   padding: 0 calc(6px * var(--u));
   cursor: pointer;
 }
-.magik-toolbar button:hover {
+.magik-toolbar button:hover,
+.magik-menu-row button:hover {
   background: var(--comfy-input-bg, #383838);
   border-color: var(--border-color, #444);
 }
-.magik-toolbar button.active {
+.magik-toolbar button.active,
+.magik-menu-row button.active {
   border-color: var(--fg-color, #ddd);
+}
+.magik-menu-row {
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--u));
+  flex: 0 0 auto;
+  padding: calc(2px * var(--u)) calc(4px * var(--u));
+  border-bottom: 1px solid var(--border-color, #333);
+  background: var(--comfy-menu-bg, #262626);
 }
 .magik-toolbar button.magik-spell.active {
   border-color: #6a9955;
@@ -206,15 +218,21 @@ const CSS = `
   resize: none;
   outline: none;
 }
+.magik-title-row {
+  flex: 0 0 auto;
+  padding: calc(2px * var(--u)) calc(4px * var(--u));
+  border-bottom: 1px solid var(--border-color, #333);
+  background: var(--comfy-menu-bg, #262626);
+}
 .magik-panel-title {
-  width: calc(110px * var(--u));
-  flex: 0 1 auto;
+  width: 100%;
+  box-sizing: border-box;
   background: transparent;
   color: #c586c0;
   border: 1px solid transparent;
   border-radius: calc(4px * var(--u));
-  font: bold calc(14px * var(--u))/1.6 monospace;
-  padding: 0 calc(4px * var(--u));
+  font: bold calc(17px * var(--u))/1.5 monospace;
+  padding: calc(2px * var(--u)) calc(6px * var(--u));
 }
 .magik-panel-title:hover,
 .magik-panel-title:focus {
@@ -260,7 +278,9 @@ const CSS = `
 }
 .magik-text-editor.magik-collapsed .magik-body,
 .magik-text-editor.magik-collapsed .magik-cards,
-.magik-text-editor.magik-collapsed .magik-resize-handle {
+.magik-text-editor.magik-collapsed .magik-resize-handle,
+.magik-text-editor.magik-collapsed .magik-menu-row,
+.magik-text-editor.magik-collapsed .magik-title-row {
   display: none;
 }
 .magik-text-editor.magik-collapsed {
@@ -752,15 +772,23 @@ class MagikTextEditor {
     ta.focus();
   }
 
-  setPanelsControls(onAdd) {
-    const sep = el("span", "magik-toolbar-sep");
+  hideUiButtons() {
+    if (this.uiDownBtn) this.uiDownBtn.remove();
+    if (this.uiUpBtn) this.uiUpBtn.remove();
+    this.uiDownBtn = null;
+    this.uiUpBtn = null;
+  }
+
+  setMenuRow(onAdd) {
+    this.menuRow = el("div", "magik-menu-row");
+    if (this.uiDownBtn) this.menuRow.appendChild(this.uiDownBtn);
+    if (this.uiUpBtn) this.menuRow.appendChild(this.uiUpBtn);
     this.panelLabel = el("span", "magik-panels-label", "");
     const plus = el("button", null, "＋");
     plus.title = "Add a text panel (adds one output)";
     plus.addEventListener("click", onAdd);
-    this.toolbar.insertBefore(sep, this.stats);
-    this.toolbar.insertBefore(this.panelLabel, this.stats);
-    this.toolbar.insertBefore(plus, this.stats);
+    this.menuRow.append(this.panelLabel, plus);
+    this.root.insertBefore(this.menuRow, this.toolbar);
   }
 
   setCloseButton(onClose) {
@@ -1008,18 +1036,22 @@ class MagikTextEditor {
   }
 
   setPanelTitle(title, onChange) {
+    if (!this.titleRow) {
+      this.titleRow = el("div", "magik-title-row");
+      this.root.insertBefore(this.titleRow, this.cardsRow);
+    }
     const input = document.createElement("input");
     input.className = "magik-panel-title";
     input.value = title;
     input.spellcheck = false;
-    input.title = "Panel title — also used as this panel's output name";
+    input.title = "Panel title — also used as this panel's output label";
     input.addEventListener("change", () => {
       const v = input.value.trim();
       if (v && v !== title) onChange(v);
       else input.value = title;
     });
     this.panelTitleInput = input;
-    this.toolbar.insertBefore(input, this.toolbar.firstChild);
+    this.titleRow.appendChild(input);
   }
 
   setPanelTitleValue(title) {
@@ -1523,7 +1555,10 @@ function setupPanelsNode(node) {
     }
   };
 
-  firstEditor.setPanelsControls(() => setCount(getCount() + 1));
+  editors.forEach((editor) => {
+    if (editor && editor !== firstEditor) editor.hideUiButtons();
+  });
+  firstEditor.setMenuRow(() => setCount(getCount() + 1));
 
   const origCallback = countWidget.callback;
   countWidget.callback = function (v) {
