@@ -21,6 +21,87 @@ const PANEL_NAMES = ["text", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) =>
 const WILDCARD_NAMES = ["wildcards", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `wildcards${i + 2}`)];
 const COLLAPSE_NAMES = ["collapse", ...Array.from({ length: MAX_PANELS - 1 }, (_, i) => `collapse${i + 2}`)];
 const panelsControls = new WeakMap();
+const COLS_MAX = 5;
+const COLS_WIDTH = 320;
+const COLS_GAP = 8;
+const COLS_MARGIN = 10;
+const columnsNodes = new Set();
+const hookedCanvases = new WeakSet();
+
+function getDomWidgetStates() {
+  const pinia = app.vueApp?.config?.globalProperties?.$pinia;
+  const store = pinia?._s?.get?.("domWidget");
+  return store?.widgetStates;
+}
+
+function layoutColumns(node, states) {
+  const c = panelsControls.get(node);
+  if (!c) return;
+  const cols = c.getCols();
+  if (cols <= 1) return;
+  const n = c.getCount();
+  const widgets = c.widgets;
+  const baseY = widgets[0]?.y ?? 30;
+  const full = [];
+  for (let i = 0; i < n; i++) {
+    full.push(widgets[i]?.computedHeight ?? ((c.editors[i]?.currentHeight() ?? 200) + 2 * COLS_MARGIN));
+  }
+  const rows = Math.ceil(n / cols);
+  const rowY = new Array(rows).fill(0);
+  let acc = 0;
+  for (let r = 0; r < rows; r++) {
+    let h = 0;
+    for (let i = r * cols; i < Math.min(n, (r + 1) * cols); i++) h = Math.max(h, full[i]);
+    rowY[r] = acc;
+    acc += h + COLS_GAP;
+  }
+  for (let i = 0; i < n; i++) {
+    const w = widgets[i];
+    if (!w) continue;
+    w.width = COLS_WIDTH + 2 * COLS_MARGIN;
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = node.pos[0] + COLS_MARGIN + col * (COLS_WIDTH + COLS_GAP);
+    const y = node.pos[1] + COLS_MARGIN + baseY + rowY[row];
+    const st = states.get(w.id);
+    if (st) {
+      st.pos = [x, y];
+      st.size = [COLS_WIDTH, Math.max(0, full[i] - 2 * COLS_MARGIN)];
+    } else if (w.element?.parentElement) {
+      const canvas = app.canvas;
+      const ds = canvas?.ds;
+      const rect = canvas?.canvas?.getBoundingClientRect();
+      if (ds && rect) {
+        const el = w.element.parentElement;
+        el.style.left = `${rect.left + x * ds.scale + ds.offset[0]}px`;
+        el.style.top = `${rect.top + y * ds.scale + ds.offset[1]}px`;
+        el.style.width = `${COLS_WIDTH * ds.scale}px`;
+        el.style.height = `${Math.max(0, full[i] - 2 * COLS_MARGIN) * ds.scale}px`;
+      }
+    }
+  }
+}
+
+function ensureColumnHook() {
+  const canvas = app.canvas;
+  if (!canvas || hookedCanvases.has(canvas)) return;
+  hookedCanvases.add(canvas);
+  const prev = canvas.onDrawForeground;
+  canvas.onDrawForeground = function (...args) {
+    const r = prev?.apply(this, args);
+    try {
+      const states = getDomWidgetStates();
+      if (states) {
+        for (const node of columnsNodes) layoutColumns(node, states);
+      } else {
+        for (const node of columnsNodes) layoutColumns(node, new Map());
+      }
+    } catch {
+      // column layout is best-effort — never break canvas drawing
+    }
+    return r;
+  };
+}
 
 const TOKEN_RE = /(\/\*[\s\S]*?(?:\*\/|$))|((?:^|\n)[ \t\r]*)(#[^\n]*)|(\([^()\n]*:-?\d+(?:\.\d+)?\))|(\[[^\]\n]*(?:\||:\d)[^\]\n]*\])|(<[^<>\n]+>)/g;
 
@@ -77,6 +158,11 @@ const CSS = `
   padding: calc(2px * var(--u)) calc(4px * var(--u));
   border-bottom: 1px solid var(--border-color, #333);
   background: var(--comfy-menu-bg, #262626);
+}
+.magik-menu-row .magik-cols-slider {
+  width: calc(80px * var(--u));
+  accent-color: #4da3ff;
+  cursor: pointer;
 }
 .magik-toolbar button.magik-spell.active {
   border-color: #6a9955;
@@ -779,10 +865,26 @@ class MagikTextEditor {
     this.uiUpBtn = null;
   }
 
-  setMenuRow(onAdd) {
+  setMenuRow(onAdd, colsApi) {
     this.menuRow = el("div", "magik-menu-row");
     if (this.uiDownBtn) this.menuRow.appendChild(this.uiDownBtn);
     if (this.uiUpBtn) this.menuRow.appendChild(this.uiUpBtn);
+    if (colsApi) {
+      const colsLabel = el("span", "magik-panels-label", "cols");
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = "1";
+      slider.max = String(COLS_MAX);
+      slider.step = "1";
+      slider.value = String(colsApi.get());
+      slider.className = "magik-cols-slider";
+      slider.title = `Number of panel columns (1–${COLS_MAX})`;
+      slider.addEventListener("input", () => {
+        colsApi.set(parseInt(slider.value, 10));
+        slider.value = String(colsApi.get());
+      });
+      this.menuRow.append(colsLabel, slider);
+    }
     this.panelLabel = el("span", "magik-panels-label", "");
     const plus = el("button", null, "＋");
     plus.title = "Add a text panel (adds one output)";
@@ -1361,6 +1463,27 @@ function setupPanelsNode(node) {
     syncPanels();
     node.graph?.change?.();
   };
+  let cols = -1;
+  const colsKeyFn = () => `magik-text.cols.${node.id ?? "?"}`;
+  const loadCols = () => {
+    try {
+      const v = parseInt(localStorage.getItem(colsKeyFn()) || "", 10);
+      if (Number.isFinite(v)) return Math.min(COLS_MAX, Math.max(1, v));
+    } catch {}
+    return 1;
+  };
+  const getCols = () => {
+    if (cols < 0) cols = loadCols();
+    return cols;
+  };
+  const setCols = (v) => {
+    cols = Math.min(COLS_MAX, Math.max(1, Math.round(Number(v)) || 1));
+    try {
+      localStorage.setItem(colsKeyFn(), String(cols));
+    } catch {}
+    syncPanels();
+    node.setDirtyCanvas(true, true);
+  };
   PANEL_NAMES.forEach((name, i) => {
     const widget = node.widgets?.find((w) => w.name === name && w.element);
     if (!widget) return;
@@ -1471,6 +1594,25 @@ function setupPanelsNode(node) {
       node.setSize([w, cs[1]]);
     }
     lastCount = n;
+    const cc = getCols();
+    if (cc > 1) {
+      const gw = 2 * COLS_MARGIN + cc * COLS_WIDTH + (cc - 1) * COLS_GAP;
+      const baseY = textWidgets[0]?.y ?? 30;
+      let gh = COLS_MARGIN + baseY;
+      const rows = Math.ceil(n / cc);
+      for (let r = 0; r < rows; r++) {
+        let rh = 0;
+        for (let i = r * cc; i < Math.min(n, (r + 1) * cc); i++) {
+          rh = Math.max(rh, textWidgets[i]?.computedHeight ?? ((editors[i]?.currentHeight() ?? 200) + 2 * COLS_MARGIN));
+        }
+        gh += rh + COLS_GAP;
+      }
+      node.setSize([gw, gh + COLS_MARGIN - COLS_GAP]);
+    } else {
+      textWidgets.forEach((w) => {
+        if (w) w.width = undefined;
+      });
+    }
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
   };
@@ -1558,7 +1700,15 @@ function setupPanelsNode(node) {
   editors.forEach((editor) => {
     if (editor && editor !== firstEditor) editor.hideUiButtons();
   });
-  firstEditor.setMenuRow(() => setCount(getCount() + 1));
+  firstEditor.setMenuRow(() => setCount(getCount() + 1), { get: getCols, set: setCols });
+
+  columnsNodes.add(node);
+  ensureColumnHook();
+  const prevOnRemoved = node.onRemoved;
+  node.onRemoved = function (...args) {
+    columnsNodes.delete(node);
+    if (prevOnRemoved) prevOnRemoved.apply(this, args);
+  };
 
   const origCallback = countWidget.callback;
   countWidget.callback = function (v) {
@@ -1586,7 +1736,23 @@ function setupPanelsNode(node) {
     }
   };
 
-  panelsControls.set(node, { getCount, setCount, sync: syncPanels, closePanel, duplicatePanel, addLink, removeLink, getLinks: () => links });
+  panelsControls.set(node, {
+    getCount,
+    setCount,
+    sync: syncPanels,
+    closePanel,
+    duplicatePanel,
+    addLink,
+    removeLink,
+    getLinks: () => links,
+    widgets: textWidgets,
+    editors,
+    getCols,
+    setCols,
+    reloadCols: () => {
+      cols = loadCols();
+    },
+  });
   syncPanels();
 }
 
@@ -1605,6 +1771,7 @@ app.registerExtension({
       const controls = panelsControls.get(this);
       if (controls) {
         try {
+          controls.reloadCols?.();
           controls.sync();
         } catch (err) {
           console.error("[magik-text] panel sync after load failed", err);
