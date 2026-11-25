@@ -8,11 +8,9 @@ and support for comments inside prompts.
 - **Magik Text** (`Magik.Text`) — a multiline text box with a dynamic number of
   panels. Every panel is a full text editor (with cards, comments and
   highlighting) and has its own output. The node has a menu row at the very top
-  (above the first panel) holding the global UI-size slider, a columns slider
-  (1–5, integer steps), the panel count and the ＋ add-panel button (the node's right-click menu can
-  also add/remove panels); each new panel adds one output, up to 10. The columns
-  slider arranges the panels in a grid of that many columns (persisted per node in
-  local storage); 1 column is the default vertical stack. Each panel has a prominent title row of
+  (above the first panel) holding the global UI-size slider, the panel count and
+  the ＋ add-panel button (the node's right-click menu can also add/remove
+  panels); each new panel adds one output, up to 10. Each panel has a prominent title row of
   its own just under its toolbar. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
   whose output is connected cannot be closed. Each panel also has a ⧉ duplicate
