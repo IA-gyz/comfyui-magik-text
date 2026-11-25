@@ -38,9 +38,28 @@ function layoutColumns(node, states) {
   const c = panelsControls.get(node);
   if (!c) return;
   const cols = c.getCols();
-  if (cols <= 1) return;
   const n = c.getCount();
   const widgets = c.widgets;
+  if (cols <= 1) {
+    for (let i = 0; i < n; i++) {
+      const w = widgets[i];
+      if (!w) continue;
+      w.width = undefined;
+      const st = states.get(w.id);
+      if (st) {
+        const margin = w.margin ?? COLS_MARGIN;
+        st.pos = [node.pos[0] + margin, node.pos[1] + margin + (w.y ?? 0)];
+        st.size = [Math.max(0, (node.size?.[0] ?? 0) - 2 * margin), Math.max(0, (w.computedHeight ?? 50) - 2 * margin)];
+      } else if (w.element?.parentElement) {
+        const elp = w.element.parentElement;
+        elp.style.left = "";
+        elp.style.top = "";
+        elp.style.width = "";
+        elp.style.height = "";
+      }
+    }
+    return;
+  }
   const baseY = widgets[0]?.y ?? 30;
   const full = [];
   for (let i = 0; i < n; i++) {
@@ -159,8 +178,15 @@ const CSS = `
   border-bottom: 1px solid var(--border-color, #333);
   background: var(--comfy-menu-bg, #262626);
 }
-.magik-menu-row .magik-cols-slider {
+.magik-menu-row .magik-cols-slider,
+.magik-menu-row .magik-ui-slider {
   width: calc(80px * var(--u));
+  accent-color: #4da3ff;
+  cursor: pointer;
+}
+.magik-toolbar .magik-ui-slider {
+  width: calc(70px * var(--u));
+  align-self: center;
   accent-color: #4da3ff;
   cursor: pointer;
 }
@@ -573,13 +599,17 @@ function saveUiScale() {
   window.dispatchEvent(new CustomEvent(UI_SCALE_EVENT));
 }
 
-function stepUiScale(dir) {
+function uiScaleStepIndex(v) {
   let best = 0;
   for (let i = 0; i < UI_SCALE_STEPS.length; i++) {
-    if (Math.abs(UI_SCALE_STEPS[i] - uiScale) < Math.abs(UI_SCALE_STEPS[best] - uiScale)) best = i;
+    if (Math.abs(UI_SCALE_STEPS[i] - v) < Math.abs(UI_SCALE_STEPS[best] - v)) best = i;
   }
-  best = Math.min(UI_SCALE_STEPS.length - 1, Math.max(0, best + dir));
-  uiScale = UI_SCALE_STEPS[best];
+  return best;
+}
+
+function setUiScaleStep(i) {
+  const idx = Math.min(UI_SCALE_STEPS.length - 1, Math.max(0, Math.round(Number(i)) || 0));
+  uiScale = UI_SCALE_STEPS[idx];
   saveUiScale();
 }
 
@@ -639,12 +669,15 @@ class MagikTextEditor {
     fontUp.title = "Increase font size";
     fontUp.addEventListener("click", () => this.setFontSize(this.fontSize + 1));
     const uiPct = `${Math.round(uiScale * 100)}%`;
-    this.uiDownBtn = el("button", "magik-ui-size", "UI−");
-    this.uiDownBtn.title = `Decrease UI size of all panels — global setting (currently ${uiPct})`;
-    this.uiDownBtn.addEventListener("click", () => stepUiScale(-1));
-    this.uiUpBtn = el("button", "magik-ui-size", "UI+");
-    this.uiUpBtn.title = `Increase UI size of all panels — global setting (currently ${uiPct})`;
-    this.uiUpBtn.addEventListener("click", () => stepUiScale(1));
+    this.uiScaleSlider = document.createElement("input");
+    this.uiScaleSlider.type = "range";
+    this.uiScaleSlider.min = "0";
+    this.uiScaleSlider.max = String(UI_SCALE_STEPS.length - 1);
+    this.uiScaleSlider.step = "1";
+    this.uiScaleSlider.value = String(uiScaleStepIndex(uiScale));
+    this.uiScaleSlider.className = "magik-ui-slider";
+    this.uiScaleSlider.title = `UI size of all panels — global setting (currently ${uiPct})`;
+    this.uiScaleSlider.addEventListener("input", () => setUiScaleStep(parseInt(this.uiScaleSlider.value, 10)));
     this.alignBtn = el("button", "magik-align", "L");
     this.alignBtn.title = "Text alignment: click to cycle left / center / right";
     this.alignBtn.addEventListener("click", () => {
@@ -661,7 +694,7 @@ class MagikTextEditor {
     this.spellBtn.title = "Toggle spellcheck — misspelled words get squiggles; right-click one for corrections";
     this.spellBtn.addEventListener("click", () => this.setSpellcheck(!this.spellOn));
     this.stats = el("span", "magik-stats");
-    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.uiDownBtn, this.uiUpBtn, this.alignBtn, this.colorInput, this.spellBtn, this.stats);
+    toolbar.append(btnLine, btnBlock, this.btnWrap, fontDown, fontUp, this.uiScaleSlider, this.alignBtn, this.colorInput, this.spellBtn, this.stats);
 
     this.fontSize = DEFAULT_FONT_SIZE;
     this.fontKeyFn = null;
@@ -858,17 +891,17 @@ class MagikTextEditor {
     ta.focus();
   }
 
-  hideUiButtons() {
-    if (this.uiDownBtn) this.uiDownBtn.remove();
-    if (this.uiUpBtn) this.uiUpBtn.remove();
-    this.uiDownBtn = null;
-    this.uiUpBtn = null;
+  hideUiScaleControl() {
+    if (this.uiScaleSlider) this.uiScaleSlider.remove();
+    this.uiScaleSlider = null;
   }
 
   setMenuRow(onAdd, colsApi) {
     this.menuRow = el("div", "magik-menu-row");
-    if (this.uiDownBtn) this.menuRow.appendChild(this.uiDownBtn);
-    if (this.uiUpBtn) this.menuRow.appendChild(this.uiUpBtn);
+    if (this.uiScaleSlider) {
+      const uiLabel = el("span", "magik-panels-label", "ui");
+      this.menuRow.append(uiLabel, this.uiScaleSlider);
+    }
     if (colsApi) {
       const colsLabel = el("span", "magik-panels-label", "cols");
       const slider = document.createElement("input");
@@ -880,8 +913,9 @@ class MagikTextEditor {
       slider.className = "magik-cols-slider";
       slider.title = `Number of panel columns (1–${COLS_MAX})`;
       slider.addEventListener("input", () => {
-        colsApi.set(parseInt(slider.value, 10));
-        slider.value = String(colsApi.get());
+        const v = Math.min(COLS_MAX, Math.max(1, Math.round(Number(slider.value)) || 1));
+        slider.value = String(v);
+        colsApi.set(v);
       });
       this.menuRow.append(colsLabel, slider);
     }
@@ -1110,9 +1144,11 @@ class MagikTextEditor {
   applyUiScale() {
     document.documentElement.style.setProperty("--magik-ui-scale", String(uiScale));
     if (this.pre) this.setFontSize(this.fontSize, false);
-    const pct = `${Math.round(uiScale * 100)}%`;
-    if (this.uiDownBtn) this.uiDownBtn.title = `Decrease UI size of all panels — global setting (currently ${pct})`;
-    if (this.uiUpBtn) this.uiUpBtn.title = `Increase UI size of all panels — global setting (currently ${pct})`;
+    if (this.uiScaleSlider) {
+      const pct = `${Math.round(uiScale * 100)}%`;
+      this.uiScaleSlider.value = String(uiScaleStepIndex(uiScale));
+      this.uiScaleSlider.title = `UI size of all panels — global setting (currently ${pct})`;
+    }
   }
 
   setHeight(px, save = true) {
@@ -1540,6 +1576,7 @@ function setupPanelsNode(node) {
 
   let initialized = false;
   let lastCount = 0;
+  let lastCols = 0;
   const syncPanels = () => {
     reloadLinks();
     const n = getCount();
@@ -1612,7 +1649,12 @@ function setupPanelsNode(node) {
       textWidgets.forEach((w) => {
         if (w) w.width = undefined;
       });
+      if (lastCols > 1) {
+        const cs2 = node.computeSize();
+        node.setSize([cs2[0], cs2[1]]);
+      }
     }
+    lastCols = cc;
     node.setDirtyCanvas(true, true);
     node.graph?.change?.();
   };
@@ -1698,7 +1740,7 @@ function setupPanelsNode(node) {
   };
 
   editors.forEach((editor) => {
-    if (editor && editor !== firstEditor) editor.hideUiButtons();
+    if (editor && editor !== firstEditor) editor.hideUiScaleControl();
   });
   firstEditor.setMenuRow(() => setCount(getCount() + 1), { get: getCols, set: setCols });
 

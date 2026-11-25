@@ -8,8 +8,8 @@ and support for comments inside prompts.
 - **Magik Text** (`Magik.Text`) — a multiline text box with a dynamic number of
   panels. Every panel is a full text editor (with cards, comments and
   highlighting) and has its own output. The node has a menu row at the very top
-  (above the first panel) holding the global UI-size buttons, a columns slider
-  (1–5), the panel count and the ＋ add-panel button (the node's right-click menu can
+  (above the first panel) holding the global UI-size slider, a columns slider
+  (1–5, integer steps), the panel count and the ＋ add-panel button (the node's right-click menu can
   also add/remove panels); each new panel adds one output, up to 10. The columns
   slider arranges the panels in a grid of that many columns (persisted per node in
   local storage); 1 column is the default vertical stack. Each panel has a prominent title row of
@@ -64,7 +64,8 @@ textarea. It provides:
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
   Font size, alignment, color and height are persisted per panel in local storage (keyed by node id +
   widget name) and restored on reload / tab switch. There is also a global UI size setting
-  (`UI−` / `UI+` in the menu row at the top of the node): one global value for all panels that scales the whole panel UI
+  (the `ui` slider in the menu row at the top of the node, stepping through
+  75% / 85% / 100% / 115% / 130% / 150% / 175% / 200%): one global value for all panels that scales the whole panel UI
   (toolbar, cards, text and handle) at once through a single CSS variable, so every editor scales
   identically and panel heights / node layout stay unchanged (no gaps between panels). Persisted
   in local storage under a single global key, applied to every Magik text editor, independent of
