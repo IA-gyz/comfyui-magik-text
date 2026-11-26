@@ -672,7 +672,7 @@ class MagikTextEditor {
   }
 
   setValue(value) {
-    if (this.ta.value === value) return;
+    if (this.ta.value === value && this.rendered) return;
     this.ta.value = value;
     this.render();
   }
@@ -683,6 +683,7 @@ class MagikTextEditor {
   }
 
   render() {
+    this.rendered = true;
     this.code.innerHTML = highlight(this.ta.value);
     this.syncScroll();
     this.updateStats();

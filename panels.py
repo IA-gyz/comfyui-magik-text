@@ -64,12 +64,12 @@ def parse_links(raw, max_links):
 
 
 def concat_outputs(links, texts, max_links):
-    """One output per link — ``texts[a] + " " + texts[b]`` — then empty strings up to ``max_links``."""
+    """One output per link — the two texts joined with a single space, empty sides omitted — then empty strings up to ``max_links``."""
     out = []
     for a, b in parse_links(links, max_links):
         ta = texts[a] if 0 <= a < len(texts) else ""
         tb = texts[b] if 0 <= b < len(texts) else ""
-        out.append(f"{ta} {tb}")
+        out.append(" ".join(part for part in (ta, tb) if part))
     while len(out) < max_links:
         out.append("")
     return out

@@ -123,7 +123,7 @@ class MagikText7Concat(io.ComfyNode):
     def execute(cls, text1, text2, text3, text4, text5, text6, text7, delimiter):
         texts = [strip_comments(_clean(t)) for t in (text1, text2, text3, text4, text5, text6, text7)]
 
-        if delimiter == "\\n":
+        if delimiter in ("\\n", "\\\\n"):
             delimiter = "\n"
 
         concat = delimiter.join(texts)

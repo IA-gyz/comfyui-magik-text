@@ -79,7 +79,11 @@ class TestConcatOutputs(unittest.TestCase):
         self.assertEqual(concat_outputs("[[0, 1], [2, 0]]", ["a", "b", "c"], 10), ["a b", "c a"] + [""] * 8)
 
     def test_out_of_range_index_is_empty(self):
-        self.assertEqual(concat_outputs("[[0, 5]]", ["a"], 10), ["a "] + [""] * 9)
+        self.assertEqual(concat_outputs("[[0, 5]]", ["a"], 10), ["a"] + [""] * 9)
+
+    def test_empty_sides_are_not_space_padded(self):
+        self.assertEqual(concat_outputs("[[1, 2]]", ["a"], 10), [""] * 10)
+        self.assertEqual(concat_outputs("[[0, 1]]", ["a", ""], 10), ["a"] + [""] * 9)
 
     def test_always_max_length(self):
         self.assertEqual(len(concat_outputs("[]", ["a"], 10)), 10)
