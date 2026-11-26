@@ -78,8 +78,8 @@ textarea. It provides:
 - **wildcards toggle** (`wild` button in each panel's toolbar, on by default):
   when on, the panel's text is expanded with ComfyUI's dynamic-prompt rules
   at queue time — `{a|b|c}` picks one option at random (nesting and `\{`
-  escapes work, `/* */` and `//` comments are stripped, exactly like ComfyUI's
-  built-in dynamic prompts). When off, the text is sent verbatim.
+  escapes work, `/* */` block comments and `//` line comments (at the start of a
+  line) are stripped first). When off, the text is sent verbatim.
 - **panel title**: each panel has its own prominent title row (full-width, bold, larger
   font) just under its toolbar; renaming the title changes the **label** of the
   corresponding output slot to `<index>-<title>` (1-based index, e.g. `3-bob`; the

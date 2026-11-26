@@ -289,7 +289,6 @@ const CSS = `
 .magik-text-editor.magik-collapsed .magik-body,
 .magik-text-editor.magik-collapsed .magik-cards,
 .magik-text-editor.magik-collapsed .magik-resize-handle,
-.magik-text-editor.magik-collapsed .magik-menu-row,
 .magik-text-editor.magik-collapsed .magik-title-row {
   display: none;
 }
@@ -415,13 +414,14 @@ function stripComments(text) {
 }
 
 function processDynamicPrompt(input) {
-  const strip = (str) => str.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  const strip = (str) =>
+    str.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\n)[ \t]*\/\/[^\n]*/g, "$1");
   let i = 0;
   let result = "";
   input = strip(input);
   const handleEscape = () => {
     const nextChar = input[i++];
-    return "\\" + nextChar;
+    return nextChar === undefined ? "\\" : "\\" + nextChar;
   };
   function parseChoiceBlock() {
     const options = [];
@@ -913,7 +913,9 @@ class MagikTextEditor {
   }
 
   currentHeight() {
-    return this.collapsed ? COLLAPSED_HEIGHT : this.height;
+    if (!this.collapsed) return this.height;
+    const menuHeight = this.menuRow ? this.menuRow.offsetHeight : 0;
+    return COLLAPSED_HEIGHT + (menuHeight > 0 ? menuHeight : 0);
   }
 
   setConnected(v) {
@@ -1025,6 +1027,7 @@ class MagikTextEditor {
   applyUiScale() {
     document.documentElement.style.setProperty("--magik-ui-scale", String(uiScale));
     if (this.pre) this.setFontSize(this.fontSize, false);
+    this.applyHeight();
     if (this.uiScaleSlider) {
       const pct = `${Math.round(uiScale * 100)}%`;
       this.uiScaleSlider.value = String(uiScaleStepIndex(uiScale));
@@ -1427,6 +1430,7 @@ function setupPanelsNode(node) {
     const out = node.outputs[i];
     if (out) out.label = panelLabel(i);
     node.setDirtyCanvas(true, true);
+    node.graph?.change?.();
   };
 
   const getCount = () => {
@@ -1517,6 +1521,14 @@ function setupPanelsNode(node) {
     }
   };
 
+  const setTextValue = (j, v) => {
+    const w = textWidgets[j];
+    if (!w) return;
+    const s = v == null ? "" : String(v);
+    w.value = s;
+    if (w.options?.setValue) w.options.setValue(s);
+  };
+
   const closePanel = (i) => {
     const n = getCount();
     if (i >= n) return;
@@ -1532,14 +1544,14 @@ function setupPanelsNode(node) {
     }
     try {
       for (let j = i; j < n - 1; j++) {
-        if (textWidgets[j + 1]) textWidgets[j].value = textWidgets[j + 1].value;
+        if (textWidgets[j + 1]) setTextValue(j, textWidgets[j + 1].value);
         if (wildWidgets[j + 1]) wildWidgets[j].value = wildWidgets[j + 1].value;
         if (collapseWidgets[j + 1]) collapseWidgets[j].value = collapseWidgets[j + 1].value;
         titles[j] = titles[j + 1] ?? PANEL_NAMES[j];
         const out = node.outputs[j];
         if (out) out.label = panelLabel(j);
       }
-      if (textWidgets[n - 1]) textWidgets[n - 1].value = "";
+      setTextValue(n - 1, "");
       if (wildWidgets[n - 1]) wildWidgets[n - 1].value = false;
       if (collapseWidgets[n - 1]) collapseWidgets[n - 1].value = false;
       links = normalizeLinks(
@@ -1564,7 +1576,7 @@ function setupPanelsNode(node) {
       return;
     }
     try {
-      if (textWidgets[n]) textWidgets[n].value = textWidgets[i].value;
+      setTextValue(n, textWidgets[i].value);
       if (wildWidgets[n]) wildWidgets[n].value = wildWidgets[i] ? wildWidgets[i].value : false;
       if (collapseWidgets[n]) collapseWidgets[n].value = collapseWidgets[i] ? collapseWidgets[i].value : false;
       titles[n] = titles[i] ?? PANEL_NAMES[i];
