@@ -23,7 +23,7 @@ and support for comments inside prompts.
   single space, computed live at queue time (comments stripped, panels beyond the
   count read as empty). Both concatenated panels then show the two badges side by
   side; click a linked badge without dragging to remove the link. Links are stored
-  in the workflow (up to 10). Panels that are
+  in the workflow (up to 10). While any link exists, all 10 panel outputs stay visible (panels beyond the count output an empty string) so the concat outputs keep their positions. Panels that are
   in use — their output is connected to another node's input, or their text field
   is converted to an input and linked — are highlighted with a prominent glowing
   border and title, so connected panels stand out at a glance. Every output label is
@@ -38,7 +38,7 @@ and support for comments inside prompts.
 - **Magik Text 7x Concat** (`Magik.Text7Concat`) — seven multiline text boxes
   (`text1`–`text7`) plus a `delimiter`. Outputs each box individually and a
   `concat` output joining all seven with the delimiter. Empty boxes are kept
-  as empty entries. Use the literal `\n` as delimiter for newlines.
+  as empty entries. Use the literal `\n` (or `\\n`) as delimiter for newlines.
 
 ## Text editor
 
@@ -126,8 +126,14 @@ git clone https://github.com/IA-gyz/comfyui-magik-text.git
 
 ## Development
 
-Run the comment-stripping tests with:
+Run the Python tests with:
 
 ```bash
 python -m unittest discover -s tests -v
+```
+
+Run the frontend-function tests (requires Node.js) with:
+
+```bash
+node tests/test_web.mjs
 ```
