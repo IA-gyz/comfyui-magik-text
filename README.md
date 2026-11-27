@@ -13,7 +13,7 @@ and support for comments inside prompts.
   panels); each new panel adds one output, up to 10. Each panel has a prominent title row of
   its own just under its toolbar. Each panel has its own ✕ close button; closing a panel
   removes it and its output (values of the panels above shift up). A panel
-  whose output is connected cannot be closed. Each panel also has a ⧉ duplicate
+  cannot be closed while its own output, or the output of any later panel (which would shift up), is connected. Each panel also has a ⧉ duplicate
   button; duplicating adds a copy of the panel (text, wildcards, collapsed state
   and title) as a new panel after the last one, up to 10 panels. Each panel also has
   a colored badge button labeled with the panel's index (1, 2, …): press and drag
@@ -23,7 +23,7 @@ and support for comments inside prompts.
   single space, computed live at queue time (comments stripped, panels beyond the
   count read as empty). Both concatenated panels then show the two badges side by
   side; click a linked badge without dragging to remove the link. Links are stored
-  in the workflow (up to 10). While any link exists, all 10 panel outputs stay visible (panels beyond the count output an empty string) so the concat outputs keep their positions. Panels that are
+  in the workflow (up to 10). Panels that are
   in use — their output is connected to another node's input, or their text field
   is converted to an input and linked — are highlighted with a prominent glowing
   border and title, so connected panels stand out at a glance. Every output label is
@@ -38,7 +38,7 @@ and support for comments inside prompts.
 - **Magik Text 7x Concat** (`Magik.Text7Concat`) — seven multiline text boxes
   (`text1`–`text7`) plus a `delimiter`. Outputs each box individually and a
   `concat` output joining all seven with the delimiter. Empty boxes are kept
-  as empty entries. Use the literal `\n` (or `\\n`) as delimiter for newlines.
+  as empty entries. Use the literal `\n` (or `\t`) in the delimiter for newlines (tabs); escapes work anywhere in it, e.g. `, \n`.
 
 ## Text editor
 
@@ -49,7 +49,8 @@ textarea. It provides:
   `[a|b]` and embeddings `<lora:...>`
 - comment toggling with the toolbar buttons or keyboard:
   `Ctrl+/` (or `Cmd+/`) toggles `#` line comments on the selected lines,
-  `Ctrl+Shift+/` toggles a `/* ... */` block comment around the selection
+  `Ctrl+Shift+/` (or `Shift+Alt+A`, which works on any keyboard layout) toggles a
+  `/* ... */` block comment around the selection
 - `Tab` / `Shift+Tab` to indent or unindent (two spaces), `Enter` keeps the
   indentation of the previous line
 - spellcheck toggle (`abc` button in the toolbar, on by default, persisted per panel):
@@ -60,12 +61,16 @@ textarea. It provides:
   a per-panel text alignment (`L` button cycles left / center / right) and a per-panel font color
   (the color picker in the toolbar),
   and a per-panel height (drag the handle at the bottom of a panel, min 120 px, no upper limit).
-  Font size, alignment, color and height are persisted per panel in local storage (keyed by node id +
-  widget name) and restored on reload / tab switch. There is also a global UI size setting
+  Font size, alignment, color, height, spellcheck and the word-wrap toggle are stored per panel in the node's properties, i.e. inside the
+  workflow (so they travel with it, survive copy/paste, follow a panel when panels above it are closed, and are copied
+  by the duplicate button). Values saved by older versions in local storage are imported once when such a workflow is
+  loaded. There is also a global UI size setting
   (the `ui` slider in the menu row at the top of the node, stepping through
   75% / 85% / 100% / 115% / 130% / 150% / 175% / 200%): one global value for all panels that scales the whole panel UI
   (toolbar, cards, text and handle) at once through a single CSS variable, so every editor scales
-  identically and panel heights / node layout stay unchanged (no gaps between panels). Persisted
+  identically and panel heights / node layout stay unchanged (no gaps between panels). The one exception is very
+  large UI sizes: a panel's height never drops below its (scaled) toolbar/title/cards plus a small text area, so it grows
+  only as much as needed to keep the text visible, and collapsed panels scale with the UI size too. Persisted
   in local storage under a single global key, applied to every Magik text editor, independent of
   the per-panel font size. The status bar shows
   line/word/character counts, including the character count after comments
@@ -78,8 +83,8 @@ textarea. It provides:
 - **wildcards toggle** (`wild` button in each panel's toolbar, on by default):
   when on, the panel's text is expanded with ComfyUI's dynamic-prompt rules
   at queue time — `{a|b|c}` picks one option at random (nesting and `\{`
-  escapes work, `/* */` block comments and `//` line comments (at the start of a
-  line) are stripped first). When off, the text is sent verbatim.
+  escapes work, `/* */` and `//` comments are stripped, exactly like ComfyUI's
+  built-in dynamic prompts). When off, the text is sent verbatim.
 - **panel title**: each panel has its own prominent title row (full-width, bold, larger
   font) just under its toolbar; renaming the title changes the **label** of the
   corresponding output slot to `<index>-<title>` (1-based index, e.g. `3-bob`; the
@@ -126,14 +131,8 @@ git clone https://github.com/IA-gyz/comfyui-magik-text.git
 
 ## Development
 
-Run the Python tests with:
+Run the comment-stripping tests with:
 
 ```bash
 python -m unittest discover -s tests -v
-```
-
-Run the frontend-function tests (requires Node.js) with:
-
-```bash
-node tests/test_web.mjs
 ```
